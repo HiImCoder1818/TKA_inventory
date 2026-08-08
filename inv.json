@@ -1,12 +1,14 @@
 {
     "1parts": {
         "type": "server",
-        "bins": {
+        "front": {
             "item class 1": {
                 "item 1": {"qty": 2},
                 "item 2": {"qty": 2},
                 "item 3": {"qty": 2}
-            },
+            }
+        },
+        "back": {
             "item class 2": {
                 "item 1": {"qty": 2},
                 "item 2": {"qty": 2},
