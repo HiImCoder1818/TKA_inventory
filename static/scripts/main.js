@@ -90,6 +90,12 @@ function wire(root) {
 wire(plan);
 wire(table);
 
+// Saving the editor rewrites the whole document, so the plan re-reads it
+// rather than guessing at what changed.
+initEditor({
+    onSaved: () => loadInventory().then(applyToPlan),
+});
+
 loadInventory()
     .then(applyToPlan)
     .catch((error) => {

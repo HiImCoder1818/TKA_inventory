@@ -70,6 +70,82 @@ def inventory():
 
 
 PATH_FIELDS = ("rack", "bay", "itemClass", "item")
+RACK_TYPES = ("std", "server")
+
+
+class InventoryError(ValueError):
+    """A rejected inventory document, with a message worth showing the user."""
+
+
+def clean_inventory(raw):
+    """Check a whole inventory document and return it normalised.
+
+    Rebuilt key by key rather than trusted as-is, so nothing unexpected can
+    ride along into the file the rest of the app reads.
+    """
+    if not isinstance(raw, dict):
+        raise InventoryError("inventory must be an object of racks")
+
+    racks = {}
+    for rack_key, rack in raw.items():
+        where = f"rack {rack_key!r}"
+        if not rack_key.strip():
+            raise InventoryError("a rack is missing its name")
+        if not isinstance(rack, dict):
+            raise InventoryError(f"{where} must be an object")
+        if rack.get("type") not in RACK_TYPES:
+            raise InventoryError(f"{where} needs a type of {' or '.join(RACK_TYPES)}")
+
+        cleaned = {"type": rack["type"]}
+        for bay_key, bay in rack.items():
+            if bay_key == "type":
+                continue
+            if not bay_key.strip():
+                raise InventoryError(f"{where} has a bay with no name")
+            if not isinstance(bay, dict):
+                raise InventoryError(f"{where}, bay {bay_key!r} must be an object")
+
+            bins = {}
+            for class_key, item_class in bay.items():
+                if not class_key.strip():
+                    raise InventoryError(f"{where}, bay {bay_key!r} has an item class with no name")
+                if not isinstance(item_class, dict):
+                    raise InventoryError(
+                        f"{where}, bay {bay_key!r}, {class_key!r} must be an object"
+                    )
+
+                items = {}
+                for item_key, item in item_class.items():
+                    spot = f"{where}, {bay_key!r} / {class_key!r}"
+                    if not item_key.strip():
+                        raise InventoryError(f"{spot} has an item with no name")
+                    if not isinstance(item, dict):
+                        raise InventoryError(f"{spot}, item {item_key!r} must be an object")
+                    try:
+                        quantity = int(item["qty"])
+                    except (KeyError, TypeError, ValueError):
+                        raise InventoryError(f"{spot}, item {item_key!r} needs an integer qty")
+                    if quantity < 0:
+                        raise InventoryError(f"{spot}, item {item_key!r} cannot be negative")
+                    items[item_key] = {"qty": quantity}
+
+                bins[class_key] = items
+            cleaned[bay_key] = bins
+        racks[rack_key] = cleaned
+
+    return racks
+
+
+@app.put("/api/inventory")
+def replace_inventory():
+    """Replace the whole document — the structural editor's save."""
+    try:
+        data = clean_inventory(request.get_json(silent=True))
+    except InventoryError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    write_inventory(data)
+    return jsonify(data)
 
 
 @app.post("/api/inventory/qty")

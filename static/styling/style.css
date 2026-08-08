@@ -139,6 +139,36 @@ body {
     font-size: 0.82rem;
 }
 
+.topbar__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.topbar__edit {
+    flex: 0 0 auto;
+    padding: 0.45rem 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--bg-panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.topbar__edit:hover {
+    border-color: var(--accent);
+    background: #26303d;
+}
+
+.topbar__edit:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
 .search::placeholder {
     color: #6d7a8b;
 }
@@ -1128,6 +1158,254 @@ button.zone.is-navigable::after {
     font-family: inherit;
     font-size: 0.68rem;
     line-height: 1.35;
+}
+
+/* =========================== Inventory editor =========================== */
+
+.editor {
+    width: min(56rem, 92vw);
+    max-height: 86vh;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 0.9rem;
+    background: var(--bg-panel);
+    color: var(--text);
+    /* The body scrolls; the header and footer stay put. Flex rather than
+       fixed grid rows, because the error line comes and goes. */
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.editor[open] {
+    display: flex;
+}
+
+.editor__head,
+.editor__errors,
+.editor__foot {
+    flex: 0 0 auto;
+}
+
+.editor::backdrop {
+    background: rgba(6, 9, 14, 0.72);
+}
+
+.editor__head {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid var(--line);
+}
+
+.editor__title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 650;
+}
+
+.editor__close {
+    margin-left: auto;
+    width: 1.9rem;
+    height: 1.9rem;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 0.45rem;
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.editor__close:hover {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.editor__errors {
+    margin: 0;
+    padding: 0.7rem 1.1rem;
+    border-bottom: 1px solid var(--line);
+    background: #3a1d1d;
+    color: #ffc4c4;
+    font-size: 0.76rem;
+    line-height: 1.5;
+}
+
+.editor__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0.9rem 1.1rem;
+    overflow-y: auto;
+}
+
+/* Each level indents under the one above, with a guide down the side. */
+.editor__branch .editor__branch {
+    margin: 0.15rem 0 0.35rem 0.7rem;
+    padding-left: 0.75rem;
+    border-left: 1px solid var(--line);
+}
+
+.editor__rack {
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--bg);
+}
+
+.editor__rack + .editor__rack {
+    margin-top: 0.65rem;
+}
+
+.editor__row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.16rem 0;
+}
+
+.editor__row--rack .editor__name {
+    font-weight: 650;
+}
+
+.editor__name,
+.editor__qty,
+.editor__number,
+.editor__type {
+    min-width: 0;
+    padding: 0.32rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 0.35rem;
+    background: var(--bg-panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.78rem;
+}
+
+.editor__name {
+    flex: 1 1 auto;
+}
+
+.editor__number {
+    flex: 0 0 11rem;
+}
+
+.editor__type {
+    flex: 0 0 9rem;
+}
+
+.editor__qty {
+    flex: 0 0 5rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.editor__name:focus,
+.editor__qty:focus,
+.editor__number:focus,
+.editor__type:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+}
+
+/* Same green add / red remove language as the item index. */
+.editor__btn {
+    flex: 0 0 auto;
+    width: 1.6rem;
+    height: 1.6rem;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid;
+    border-radius: 0.3rem;
+    background: transparent;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.editor__btn--add {
+    border-color: #2f6b45;
+    color: #4ade80;
+}
+
+.editor__btn--add:hover {
+    background: #1d3a2a;
+    color: #86efac;
+}
+
+.editor__btn--remove {
+    border-color: #7a3535;
+    color: #f87171;
+}
+
+.editor__btn--remove:hover {
+    background: #3a1d1d;
+    color: #fca5a5;
+}
+
+.editor__btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.editor__empty {
+    margin: 0.2rem 0 0.35rem;
+    padding-left: 0.2rem;
+    color: #6d7a8b;
+    font-size: 0.74rem;
+    font-style: italic;
+}
+
+.editor__foot {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.85rem 1.1rem;
+    border-top: 1px solid var(--line);
+}
+
+.editor__addrack {
+    margin-right: auto;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid #2f6b45;
+    border-radius: 0.45rem;
+    background: transparent;
+    color: #4ade80;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.editor__addrack:hover {
+    background: #1d3a2a;
+}
+
+.editor__cancel {
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 0.45rem;
+    background: var(--bg-panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.editor__cancel:hover {
+    border-color: var(--accent);
+}
+
+.editor__foot .save-btn {
+    margin-top: 0;
 }
 
 /* ============================= Adaptations ============================= */
