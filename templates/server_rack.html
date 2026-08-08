@@ -45,7 +45,7 @@
                     <span class="hex" aria-hidden="true" data-fill="number">&mdash;</span>
                     <div>
                         <h2 class="board__title" data-fill="items">&mdash;</h2>
-                        <p class="board__sub">Server rack &middot; front and back faces</p>
+                        <p class="board__sub">Server rack &middot; <span data-fill="bays">&mdash;</span></p>
                     </div>
                     <a class="backlink" href="{{ url_for('index') }}">&larr; Floor plan</a>
                 </div>
@@ -63,6 +63,10 @@
             </aside>
         </main>
 
+        <script>
+            // Resolved by Flask so the front end never hardcodes a path.
+            window.INVENTORY_URL = "{{ url_for('inventory') }}";
+        </script>
         <script src="{{ url_for('static', filename='scripts/racks-data.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/rack.js') }}"></script>
     </body>

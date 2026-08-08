@@ -213,7 +213,8 @@
         </main>
 
         <script>
-            // Route table for the rack detail pages, resolved by Flask.
+            // Resolved by Flask so the front end never hardcodes a path.
+            window.INVENTORY_URL = "{{ url_for('inventory') }}";
             window.RACK_ROUTES = {
                 std: "{{ url_for('std_rack') }}",
                 server: "{{ url_for('server_rack') }}",

@@ -17,7 +17,7 @@
 //       .tree__items      what's inside it
 //
 // Both sides key off the same data-slot, so hovering either highlights both.
-// To add an item, edit racks-data.js — nothing here needs to change.
+// Everything drawn here comes from inv.json — to add an item, edit that file.
 
 const board = document.querySelector(".board");
 const bays = document.querySelector(".board__bays");
@@ -25,8 +25,10 @@ const tree = document.querySelector(".tree");
 
 const params = new URLSearchParams(window.location.search);
 const number = params.get("rack");
-const rack = RACKS[number];
-const layout = rackLayout(number);
+
+// Filled in once inv.json has loaded.
+let rack = null;
+let layout = null;
 
 function slotId(bayIndex, slotIndex) {
     return `${bayIndex}-${slotIndex}`;
@@ -213,14 +215,17 @@ function wire(root) {
     root.addEventListener("pointerleave", () => link(null));
 }
 
-if (!rack || !layout) {
-    // Reached without a valid ?rack=N — say so instead of rendering an
-    // empty frame the user can't interpret.
+// Say what went wrong rather than leaving an empty frame the reader can't
+// interpret — a bad ?rack=N and an unreachable inv.json look the same
+// otherwise.
+function showMessage(text) {
     board.classList.add("board--missing");
     board.innerHTML =
-        '<p class="board__missing">No rack layout for this address. ' +
+        `<p class="board__missing">${text} ` +
         '<a class="backlink" href="/">Back to the floor plan</a></p>';
-} else {
+}
+
+function render() {
     document.title = `Rack ${number} · ${rack.items} — TKA Inventory`;
 
     document.querySelectorAll("[data-fill='number']").forEach((el) => {
@@ -228,6 +233,10 @@ if (!rack || !layout) {
     });
     document.querySelectorAll("[data-fill='items']").forEach((el) => {
         el.textContent = rack.items;
+    });
+    // Name the bays inv.json actually gave us rather than assuming a shape.
+    document.querySelectorAll("[data-fill='bays']").forEach((el) => {
+        el.textContent = layout.map((bay) => bay.name).join(" / ");
     });
 
     renderBays();
@@ -239,3 +248,21 @@ if (!rack || !layout) {
         node.addEventListener("toggle", () => syncSlotState(node));
     });
 }
+
+loadInventory()
+    .then(() => {
+        rack = RACKS[number];
+        layout = rackLayout(number);
+
+        if (!rack) {
+            showMessage(`No rack ${number} in V-101.`);
+        } else if (!layout) {
+            showMessage(`Rack ${number} has nothing stocked in inv.json yet.`);
+        } else {
+            render();
+        }
+    })
+    .catch((error) => {
+        console.error("inventory:", error.message);
+        showMessage(`Inventory unavailable — ${error.message}.`);
+    });

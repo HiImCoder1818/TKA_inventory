@@ -976,6 +976,10 @@ button.zone.is-navigable::after {
     color: var(--text-dim);
 }
 
+.panel__hint--error {
+    color: #ff9b9b;
+}
+
 /* ============================= Adaptations ============================= */
 
 /* Laptop widths: drop the index and give the room the full stage. */

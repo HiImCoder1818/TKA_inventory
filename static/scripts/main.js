@@ -1,6 +1,6 @@
-// Floor plan interaction. The plan and the item index are two views of the
-// same 18 racks, keyed by data-rack. Racks with a detail layout open it on
-// click; the rest just select, until their layout is drawn.
+// Floor plan interaction. The plan and the rack index are two views of the
+// same 18 racks, keyed by data-rack. Which racks are stocked comes from
+// inv.json, so a rack only opens once it has contents there.
 
 const plan = document.querySelector(".plan");
 const table = document.querySelector(".index tbody");
@@ -40,11 +40,19 @@ function select(rack) {
     }
 }
 
-// Mark the racks that lead somewhere, in both views.
-function markNavigable() {
+// Reflect what inv.json actually carries: label the stocked racks, and let
+// its names win over the ones written into the table.
+function applyToPlan() {
     document.querySelectorAll("[data-rack]").forEach((el) => {
-        if (rackHref(el.dataset.rack)) {
-            el.classList.add("is-navigable");
+        el.classList.toggle("is-navigable", Boolean(rackHref(el.dataset.rack)));
+    });
+
+    document.querySelectorAll(".index tbody tr[data-rack]").forEach((row) => {
+        const rack = RACKS[row.dataset.rack];
+        const cell = row.querySelector("td");
+        if (rack && rack.layout && cell) {
+            cell.textContent = rack.items;
+            cell.classList.remove("index__todo");
         }
     });
 }
@@ -77,6 +85,18 @@ function wire(root) {
     root.addEventListener("pointerleave", () => link(null));
 }
 
-markNavigable();
+// The plan is drawn from the template, so it stands on its own if inv.json is
+// unreachable — only the openable racks depend on the fetch.
 wire(plan);
 wire(table);
+
+loadInventory()
+    .then(applyToPlan)
+    .catch((error) => {
+        console.error("inventory:", error.message);
+        const hint = document.querySelector(".panel__hint");
+        if (hint) {
+            hint.textContent = `Inventory unavailable — ${error.message}`;
+            hint.classList.add("panel__hint--error");
+        }
+    });
