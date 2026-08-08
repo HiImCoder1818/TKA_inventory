@@ -69,28 +69,23 @@ def inventory():
         return jsonify({"error": f"{INVENTORY_PATH.name} is not valid JSON: {exc}"}), 500
 
 
+PATH_FIELDS = ("rack", "bay", "itemClass", "item")
+
+
 @app.post("/api/inventory/qty")
 def update_qty():
-    """Apply a relative change to one item's quantity.
+    """Apply a batch of staged quantity changes in one write.
 
-    The client sends a delta rather than a total, so two people counting the
-    same shelf add up instead of overwriting each other.
+    Each change carries a delta rather than a total, so two people counting
+    the same shelf add up instead of overwriting each other. The whole batch
+    is validated before anything is written, so a bad path can't leave the
+    inventory half-saved.
     """
     payload = request.get_json(silent=True) or {}
+    changes = payload.get("changes")
 
-    rack = payload.get("rack")
-    bay = payload.get("bay")
-    item_class = payload.get("itemClass")
-    item = payload.get("item")
-    try:
-        delta = int(payload["delta"])
-    except (KeyError, TypeError, ValueError):
-        return jsonify({"error": "delta must be an integer"}), 400
-
-    if not all(isinstance(part, str) for part in (rack, bay, item_class, item)):
-        return jsonify({"error": "rack, bay, itemClass and item are required"}), 400
-    if bay == "type":
-        return jsonify({"error": '"type" is not a bay'}), 400
+    if not isinstance(changes, list) or not changes:
+        return jsonify({"error": "expected a non-empty list of changes"}), 400
 
     try:
         data = read_inventory()
@@ -99,17 +94,40 @@ def update_qty():
     except json.JSONDecodeError as exc:
         return jsonify({"error": f"{INVENTORY_PATH.name} is not valid JSON: {exc}"}), 500
 
-    try:
-        entry = data[rack][bay][item_class][item]
-        current = int(entry["qty"])
-    except (KeyError, TypeError, ValueError):
-        return jsonify({"error": f"no such item: {rack} / {bay} / {item_class} / {item}"}), 404
+    staged = []
+    for change in changes:
+        if not isinstance(change, dict):
+            return jsonify({"error": "each change must be an object"}), 400
 
-    quantity = max(0, current + delta)
-    entry["qty"] = quantity
+        path = {field: change.get(field) for field in PATH_FIELDS}
+        if not all(isinstance(value, str) for value in path.values()) or path["bay"] == "type":
+            return jsonify({"error": f"a change is missing one of {', '.join(PATH_FIELDS)}"}), 400
+
+        try:
+            delta = int(change["delta"])
+        except (KeyError, TypeError, ValueError):
+            return jsonify({"error": "each change needs an integer delta"}), 400
+
+        try:
+            entry = data[path["rack"]][path["bay"]][path["itemClass"]][path["item"]]
+            int(entry["qty"])
+        except (KeyError, TypeError, ValueError):
+            return jsonify({
+                "error": "no such item: "
+                         f"{path['rack']} / {path['bay']} / {path['itemClass']} / {path['item']}"
+            }), 404
+
+        staged.append((path, entry, delta))
+
+    saved = []
+    for path, entry, delta in staged:
+        quantity = max(0, int(entry["qty"]) + delta)
+        entry["qty"] = quantity
+        saved.append({**path, "qty": quantity})
+
     write_inventory(data)
 
-    return jsonify({"qty": quantity})
+    return jsonify({"changes": saved})
 
 
 if __name__ == "__main__":

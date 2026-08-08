@@ -24,6 +24,7 @@ const bays = document.querySelector(".board__bays");
 const tree = document.querySelector(".tree");
 const hint = document.querySelector(".panel__hint");
 const hintText = hint ? hint.textContent : "";
+const saveButton = document.querySelector("[data-save]");
 
 const params = new URLSearchParams(window.location.search);
 const number = params.get("rack");
@@ -141,7 +142,9 @@ function makeItem(bay, slot, item, position) {
             itemClass: slot.key,
             item: item.key,
         },
-        pending: 0,
+        // What's on disk, versus what the staged edits show.
+        saved: item.qty,
+        qty: item.qty,
         minus: null,
     };
 
@@ -225,36 +228,73 @@ function renderIndex() {
 // ------------------------------ quantities ------------------------------
 
 function syncEntry(entry) {
-    entry.qtyEl.textContent = `×${entry.item.qty}`;
-    entry.minus.disabled = entry.item.qty <= 0;
+    const dirty = entry.qty !== entry.saved;
+
+    entry.qtyEl.textContent = `×${entry.qty}`;
+    entry.qtyEl.classList.toggle("is-dirty", dirty);
+    entry.qtyEl.title = dirty ? `Unsaved — was ×${entry.saved}` : "";
+    entry.el.classList.toggle("is-dirty", dirty);
+    entry.minus.disabled = entry.qty <= 0;
 }
 
+function pendingChanges() {
+    return entries
+        .filter((entry) => entry.qty !== entry.saved)
+        .map((entry) => ({ ...entry.path, delta: entry.qty - entry.saved }));
+}
+
+function syncSaveButton(state) {
+    if (!saveButton) {
+        return;
+    }
+    const count = pendingChanges().length;
+
+    saveButton.disabled = state === "saving" || count === 0;
+    saveButton.classList.toggle("save-btn--dirty", count > 0 && state !== "saving");
+    saveButton.textContent =
+        state === "saving" ? "Saving…" :
+        count === 0 ? "No changes to save" :
+        `Save ${count} change${count === 1 ? "" : "s"}`;
+}
+
+// Edits are staged, not written — nothing reaches inv.json until Save.
 function changeQty(entry, delta) {
-    if (entry.item.qty <= 0 && delta < 0) {
+    if (entry.qty <= 0 && delta < 0) {
+        return;
+    }
+    entry.qty = Math.max(0, entry.qty + delta);
+    syncEntry(entry);
+    syncSaveButton();
+}
+
+function save() {
+    const changes = pendingChanges();
+    if (!changes.length) {
         return;
     }
 
-    // Move now, reconcile when the server answers — holding a button should
-    // feel immediate, and inv.json stays the authority.
-    entry.item.qty = Math.max(0, entry.item.qty + delta);
-    entry.pending += 1;
-    syncEntry(entry);
+    syncSaveButton("saving");
 
-    updateQty(entry.path, delta)
-        .then((qty) => {
-            entry.pending -= 1;
-            // Only the last reply in flight may overwrite what's on screen.
-            if (entry.pending === 0) {
-                entry.item.qty = qty;
-                syncEntry(entry);
-            }
-            say(null, false);
+    saveQuantities(changes)
+        .then((results) => {
+            // Trust the stored counts over the staged ones.
+            const stored = new Map(results.map((result) => [itemKey(result), result.qty]));
+            entries.forEach((entry) => {
+                const qty = stored.get(itemKey(entry.path));
+                if (qty != null) {
+                    entry.saved = qty;
+                    entry.qty = qty;
+                    entry.item.qty = qty;
+                    syncEntry(entry);
+                }
+            });
+            syncSaveButton();
+            say(`Saved ${results.length} change${results.length === 1 ? "" : "s"}.`, false);
         })
         .catch((error) => {
-            entry.pending -= 1;
-            entry.item.qty = Math.max(0, entry.item.qty - delta);
-            syncEntry(entry);
+            // The staged edits survive, so the count can be retried.
             console.error("inventory:", error.message);
+            syncSaveButton();
             say(`Could not save — ${error.message}`, true);
         });
 }
@@ -407,6 +447,20 @@ function wireKeyboard() {
     });
 }
 
+// Staged counts live only in the page, so leaving would lose them.
+function wireSave() {
+    if (saveButton) {
+        saveButton.addEventListener("click", save);
+    }
+
+    window.addEventListener("beforeunload", (event) => {
+        if (pendingChanges().length) {
+            event.preventDefault();
+            event.returnValue = "";
+        }
+    });
+}
+
 // --------------------------------- boot ---------------------------------
 
 // Say what went wrong rather than leaving an empty frame the reader can't
@@ -438,6 +492,8 @@ function render() {
     wire(board);
     wire(tree);
     wireKeyboard();
+    wireSave();
+    syncSaveButton();
 
     tree.querySelectorAll(".tree__node").forEach((node) => {
         node.addEventListener("toggle", () => syncSlotState(node));
