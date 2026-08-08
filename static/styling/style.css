@@ -894,12 +894,13 @@ button.zone.is-navigable::after {
 
 .tree__item {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 0.5rem;
-    padding: 0.28rem 0.45rem;
+    padding: 0.2rem 0.3rem 0.2rem 0.45rem;
     border-radius: 0.25rem;
     color: var(--text);
     font-size: 0.76rem;
+    scroll-margin: 2.5rem 0;
 }
 
 .tree__item-name {
@@ -911,10 +912,93 @@ button.zone.is-navigable::after {
 /* How many of this item are on hand. */
 .tree__qty {
     flex: 0 0 auto;
+    min-width: 2.1rem;
     color: var(--accent);
     font-size: 0.72rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+/* ---- Add / remove one ---- */
+
+.tree__controls {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 0.2rem;
+}
+
+.qty-btn {
+    width: 1.3rem;
+    height: 1.3rem;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid;
+    border-radius: 0.25rem;
+    background: transparent;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.qty-btn--plus {
+    border-color: #2f6b45;
+    color: #4ade80;
+}
+
+.qty-btn--plus:hover:not(:disabled) {
+    background: #1d3a2a;
+    color: #86efac;
+}
+
+.qty-btn--minus {
+    border-color: #7a3535;
+    color: #f87171;
+}
+
+.qty-btn--minus:hover:not(:disabled) {
+    background: #3a1d1d;
+    color: #fca5a5;
+}
+
+.qty-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.qty-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* ---- Keyboard cursor: the item, and the section holding it ---- */
+
+.tree__item.is-active {
+    background: #2f6fc0;
+    color: #fff;
+    outline: none;
+}
+
+.tree__item.is-active .tree__qty {
+    color: #fff;
+}
+
+.tree__group.is-section {
+    border-radius: 0.35rem;
+    background: rgba(47, 111, 192, 0.12);
+}
+
+.tree__node.is-section > .tree__class {
+    background: rgba(47, 111, 192, 0.3);
+}
+
+/* The matching box on the rack, so the cursor is findable on both sides. */
+.slot.is-section {
+    box-shadow: 0 0 0 0.16rem var(--accent);
 }
 
 .tree__item:hover {
@@ -978,6 +1062,20 @@ button.zone.is-navigable::after {
 
 .panel__hint--error {
     color: #ff9b9b;
+}
+
+.panel__hint kbd {
+    display: inline-block;
+    margin: 0 0.1rem;
+    padding: 0 0.28rem;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 0.22rem;
+    background: var(--bg-panel-2);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.68rem;
+    line-height: 1.35;
 }
 
 /* ============================= Adaptations ============================= */

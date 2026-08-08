@@ -61,18 +61,23 @@ function parseRackKey(key) {
     return { number: Number(match[1]), name: match[2].trim() };
 }
 
-// { "item 1": { qty: 2 } } -> [{ name, qty }]
+// Every level keeps its raw `key` next to the display `name`, because an edit
+// has to address inv.json by the exact keys it was written with.
+
+// { "item 1": { qty: 2 } } -> [{ key, name, qty }]
 function parseItems(entry) {
-    return Object.entries(entry || {}).map(([name, meta]) => ({
-        name: displayName(name),
+    return Object.entries(entry || {}).map(([key, meta]) => ({
+        key,
+        name: displayName(key),
         qty: meta && meta.qty != null ? meta.qty : 1,
     }));
 }
 
-// { "item class 1": {...} } -> [{ name, items }]
+// { "item class 1": {...} } -> [{ key, name, items }]
 function parseSlots(entry) {
-    return Object.entries(entry || {}).map(([name, items]) => ({
-        name: displayName(name),
+    return Object.entries(entry || {}).map(([key, items]) => ({
+        key,
+        name: displayName(key),
         items: parseItems(items),
     }));
 }
@@ -82,8 +87,9 @@ function parseSlots(entry) {
 function parseBays(entry) {
     return Object.entries(entry)
         .filter(([key]) => key !== "type")
-        .map(([name, slots]) => ({
-            name: displayName(name),
+        .map(([key, slots]) => ({
+            key,
+            name: displayName(key),
             slots: parseSlots(slots),
         }));
 }
@@ -101,6 +107,7 @@ function applyInventory(raw) {
         if (parsed.name) {
             rack.items = displayName(parsed.name);
         }
+        rack.key = key;
         rack.type = entry.type;
         rack.layout = parseBays(entry);
     });
@@ -118,21 +125,21 @@ async function loadInventory() {
     return body;
 }
 
-// Accept either "Item class 4" or { name, items } so a class can be added
-// before its contents are known.
-function normalizeSlot(slot) {
-    if (typeof slot === "string") {
-        return { name: slot, items: [] };
-    }
-    return { name: slot.name, items: slot.items || [] };
-}
+// Move one item's quantity by `delta`. The server applies the change and
+// returns the stored total, so two people counting the same shelf add up
+// instead of overwriting each other.
+async function updateQty(path, delta) {
+    const response = await fetch(window.INVENTORY_QTY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...path, delta }),
+    });
+    const body = await response.json();
 
-// Accept either "Item 1" or { name, qty }. A bare string counts as one.
-function normalizeItem(item) {
-    if (typeof item === "string") {
-        return { name: item, qty: 1 };
+    if (!response.ok) {
+        throw new Error(body.error || `update failed (${response.status})`);
     }
-    return { name: item.name, qty: item.qty == null ? 1 : item.qty };
+    return body.qty;
 }
 
 function rackLayout(number) {

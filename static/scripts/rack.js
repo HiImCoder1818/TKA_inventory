@@ -1,8 +1,8 @@
 // Rack detail pages. Both std_rack.html and server_rack.html run this — the
-// only difference is which bay layout the registry hands back, and whether
-// .board lays the bays out as stacked shelves or side-by-side faces.
+// only difference is which bay layout inv.json hands back, and whether .board
+// lays the bays out as stacked shelves or side-by-side faces.
 //
-// Slot markup is deliberately uniform for both:
+// The rack is drawn as:
 //
 //   .bay          section, one shelf or one face
 //     .bay__name  its caption
@@ -14,7 +14,7 @@
 //
 //   .tree__group          one bay
 //     .tree__node         one item class, a <details> dropdown
-//       .tree__items      what's inside it
+//       .tree__items      what's inside it, each with +/- controls
 //
 // Both sides key off the same data-slot, so hovering either highlights both.
 // Everything drawn here comes from inv.json — to add an item, edit that file.
@@ -22,6 +22,8 @@
 const board = document.querySelector(".board");
 const bays = document.querySelector(".board__bays");
 const tree = document.querySelector(".tree");
+const hint = document.querySelector(".panel__hint");
+const hintText = hint ? hint.textContent : "";
 
 const params = new URLSearchParams(window.location.search);
 const number = params.get("rack");
@@ -30,6 +32,10 @@ const number = params.get("rack");
 let rack = null;
 let layout = null;
 
+// Every item in tree order, so the arrow keys have something to walk.
+const entries = [];
+let active = -1;
+
 function slotId(bayIndex, slotIndex) {
     return `${bayIndex}-${slotIndex}`;
 }
@@ -37,6 +43,16 @@ function slotId(bayIndex, slotIndex) {
 function isPlaceholder(label) {
     return label === "…" || /^\?+$/.test(label);
 }
+
+function say(message, isError) {
+    if (!hint) {
+        return;
+    }
+    hint.textContent = message || hintText;
+    hint.classList.toggle("panel__hint--error", Boolean(isError));
+}
+
+// --------------------------------- rack ---------------------------------
 
 function makeSlot(bayName, slot, id) {
     const el = document.createElement("button");
@@ -70,8 +86,8 @@ function renderBays() {
         track.className = "bay__track";
         track.dataset.bay = String(bayIndex);
 
-        bay.slots.forEach((raw, slotIndex) => {
-            track.appendChild(makeSlot(bay.name, normalizeSlot(raw), slotId(bayIndex, slotIndex)));
+        bay.slots.forEach((slot, slotIndex) => {
+            track.appendChild(makeSlot(bay.name, slot, slotId(bayIndex, slotIndex)));
         });
 
         shelf.appendChild(track);
@@ -80,10 +96,72 @@ function renderBays() {
     });
 }
 
-function makeNode(bayName, slot, id) {
+// --------------------------------- index ---------------------------------
+
+function makeStepper(entry, delta, label) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `qty-btn qty-btn--${delta > 0 ? "plus" : "minus"}`;
+    button.textContent = delta > 0 ? "+" : "−";
+    button.setAttribute("aria-label", `${label} one ${entry.item.name}`);
+    button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setActive(entries.indexOf(entry), { focus: false });
+        changeQty(entry, delta);
+    });
+    return button;
+}
+
+function makeItem(bay, slot, item, position) {
+    const li = document.createElement("li");
+    li.className = "tree__item";
+    li.dataset.slot = slotId(position.bay, position.slot);
+    li.tabIndex = -1;
+
+    const name = document.createElement("span");
+    name.className = "tree__item-name";
+    name.textContent = item.name;
+
+    // How many of this item we hold.
+    const qty = document.createElement("span");
+    qty.className = "tree__qty";
+    qty.textContent = `×${item.qty}`;
+
+    const controls = document.createElement("span");
+    controls.className = "tree__controls";
+
+    const entry = {
+        el: li,
+        qtyEl: qty,
+        item,
+        // The exact inv.json keys this row stands for.
+        path: {
+            rack: rack.key,
+            bay: bay.key,
+            itemClass: slot.key,
+            item: item.key,
+        },
+        pending: 0,
+        minus: null,
+    };
+
+    const minus = makeStepper(entry, -1, "Remove");
+    const plus = makeStepper(entry, 1, "Add");
+    entry.minus = minus;
+    controls.append(minus, plus);
+
+    li.append(name, qty, controls);
+    li.addEventListener("click", () => setActive(entries.indexOf(entry), { focus: false }));
+
+    entries.push(entry);
+    syncEntry(entry);
+    return li;
+}
+
+function makeNode(bay, slot, bayIndex, slotIndex) {
     const node = document.createElement("details");
     node.className = "tree__node";
-    node.dataset.slot = id;
+    node.dataset.slot = slotId(bayIndex, slotIndex);
 
     const summary = document.createElement("summary");
     summary.className = "tree__class";
@@ -105,23 +183,12 @@ function makeNode(bayName, slot, id) {
     list.className = "tree__items";
 
     if (slot.items.length) {
-        slot.items.forEach((raw) => {
-            const item = normalizeItem(raw);
-
-            const li = document.createElement("li");
-            li.className = "tree__item";
-
-            const name = document.createElement("span");
-            name.className = "tree__item-name";
-            name.textContent = item.name;
-
-            // How many of this item we hold.
-            const qty = document.createElement("span");
-            qty.className = "tree__qty";
-            qty.textContent = `×${item.qty}`;
-
-            li.append(name, qty);
-            list.appendChild(li);
+        slot.items.forEach((item, itemIndex) => {
+            list.appendChild(makeItem(bay, slot, item, {
+                bay: bayIndex,
+                slot: slotIndex,
+                item: itemIndex,
+            }));
         });
     } else {
         const li = document.createElement("li");
@@ -136,6 +203,7 @@ function makeNode(bayName, slot, id) {
 
 function renderIndex() {
     tree.innerHTML = "";
+    entries.length = 0;
 
     layout.forEach((bay, bayIndex) => {
         const group = document.createElement("section");
@@ -146,17 +214,54 @@ function renderIndex() {
         heading.textContent = bay.name;
         group.appendChild(heading);
 
-        bay.slots.forEach((raw, slotIndex) => {
-            group.appendChild(makeNode(bay.name, normalizeSlot(raw), slotId(bayIndex, slotIndex)));
+        bay.slots.forEach((slot, slotIndex) => {
+            group.appendChild(makeNode(bay, slot, bayIndex, slotIndex));
         });
 
         tree.appendChild(group);
     });
 }
 
-// Highlight an item class in the rack and the index at the same time. Slots
-// keep no selected background of their own — a click opens the class rather
-// than latching, leaving room for the levels below.
+// ------------------------------ quantities ------------------------------
+
+function syncEntry(entry) {
+    entry.qtyEl.textContent = `×${entry.item.qty}`;
+    entry.minus.disabled = entry.item.qty <= 0;
+}
+
+function changeQty(entry, delta) {
+    if (entry.item.qty <= 0 && delta < 0) {
+        return;
+    }
+
+    // Move now, reconcile when the server answers — holding a button should
+    // feel immediate, and inv.json stays the authority.
+    entry.item.qty = Math.max(0, entry.item.qty + delta);
+    entry.pending += 1;
+    syncEntry(entry);
+
+    updateQty(entry.path, delta)
+        .then((qty) => {
+            entry.pending -= 1;
+            // Only the last reply in flight may overwrite what's on screen.
+            if (entry.pending === 0) {
+                entry.item.qty = qty;
+                syncEntry(entry);
+            }
+            say(null, false);
+        })
+        .catch((error) => {
+            entry.pending -= 1;
+            entry.item.qty = Math.max(0, entry.item.qty - delta);
+            syncEntry(entry);
+            console.error("inventory:", error.message);
+            say(`Could not save — ${error.message}`, true);
+        });
+}
+
+// ------------------------------ highlighting ------------------------------
+
+// Hover highlight: an item class in the rack and the index at once.
 function link(slot) {
     document.querySelectorAll(".is-linked").forEach((el) => el.classList.remove("is-linked"));
     if (slot) {
@@ -164,6 +269,73 @@ function link(slot) {
             el.classList.add("is-linked");
         });
     }
+}
+
+// Keyboard cursor: the current item, plus the class and bay it sits in.
+function setActive(next, options = {}) {
+    document.querySelectorAll(".is-active").forEach((el) => el.classList.remove("is-active"));
+    document.querySelectorAll(".is-section").forEach((el) => el.classList.remove("is-section"));
+
+    active = next;
+    if (active < 0 || active >= entries.length) {
+        return;
+    }
+
+    const entry = entries[active];
+    const node = entry.el.closest(".tree__node");
+    const group = entry.el.closest(".tree__group");
+
+    entry.el.classList.add("is-active");
+    if (node) {
+        node.open = true;
+        node.classList.add("is-section");
+    }
+    if (group) {
+        group.classList.add("is-section");
+    }
+    document.querySelectorAll(`.slot[data-slot="${entry.el.dataset.slot}"]`).forEach((el) => {
+        el.classList.add("is-section");
+    });
+
+    if (options.focus !== false) {
+        entry.el.focus({ preventScroll: true });
+    }
+    entry.el.scrollIntoView({ block: "nearest" });
+}
+
+function move(step) {
+    if (!entries.length) {
+        return;
+    }
+    if (active < 0) {
+        setActive(step > 0 ? 0 : entries.length - 1);
+        return;
+    }
+    setActive(Math.min(entries.length - 1, Math.max(0, active + step)));
+}
+
+function wire(root) {
+    if (!root) {
+        return;
+    }
+
+    root.addEventListener("click", (event) => {
+        // Let <summary> and the steppers handle their own clicks.
+        if (event.target.closest(".tree__class, .qty-btn")) {
+            return;
+        }
+        const target = event.target.closest("[data-slot]");
+        if (target) {
+            toggleSlot(target.dataset.slot);
+        }
+    });
+
+    root.addEventListener("pointerover", (event) => {
+        const target = event.target.closest("[data-slot]");
+        link(target ? target.dataset.slot : null);
+    });
+
+    root.addEventListener("pointerleave", () => link(null));
 }
 
 // Clicking an item class on the rack works the dropdown in the index, so the
@@ -191,29 +363,51 @@ function syncSlotState(node) {
     });
 }
 
-function wire(root) {
-    if (!root) {
-        return;
-    }
-
-    root.addEventListener("click", (event) => {
-        // Let <summary> handle its own toggle rather than toggling twice.
-        if (event.target.closest(".tree__class")) {
+// ↑/↓ walk every item in tree order, opening classes as they are reached;
+// +/− adjust whichever item the cursor is on.
+function wireKeyboard() {
+    document.addEventListener("keydown", (event) => {
+        if (event.metaKey || event.ctrlKey || event.altKey) {
             return;
         }
-        const target = event.target.closest("[data-slot]");
-        if (target) {
-            toggleSlot(target.dataset.slot);
+        // Never steal keys from the search box.
+        if (event.target.closest("input, textarea, [contenteditable]")) {
+            return;
+        }
+
+        switch (event.key) {
+            case "ArrowDown":
+                event.preventDefault();
+                move(1);
+                break;
+            case "ArrowUp":
+                event.preventDefault();
+                move(-1);
+                break;
+            case "+":
+            case "=":
+                if (active >= 0) {
+                    event.preventDefault();
+                    changeQty(entries[active], 1);
+                }
+                break;
+            case "-":
+            case "_":
+                if (active >= 0) {
+                    event.preventDefault();
+                    changeQty(entries[active], -1);
+                }
+                break;
+            case "Escape":
+                setActive(-1);
+                break;
+            default:
+                break;
         }
     });
-
-    root.addEventListener("pointerover", (event) => {
-        const target = event.target.closest("[data-slot]");
-        link(target ? target.dataset.slot : null);
-    });
-
-    root.addEventListener("pointerleave", () => link(null));
 }
+
+// --------------------------------- boot ---------------------------------
 
 // Say what went wrong rather than leaving an empty frame the reader can't
 // interpret — a bad ?rack=N and an unreachable inv.json look the same
@@ -243,6 +437,7 @@ function render() {
     renderIndex();
     wire(board);
     wire(tree);
+    wireKeyboard();
 
     tree.querySelectorAll(".tree__node").forEach((node) => {
         node.addEventListener("toggle", () => syncSlotState(node));

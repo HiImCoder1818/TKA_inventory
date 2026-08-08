@@ -59,13 +59,14 @@
                 <div class="index-scroll">
                     <div class="tree"></div>
                 </div>
-                <p class="panel__hint">Click an item class &mdash; on the rack or here &mdash; to see what it holds. Hovering either side lines the two up.</p>
+                <p class="panel__hint">Click an item class to see what it holds. <kbd>&uarr;</kbd><kbd>&darr;</kbd> move between items, <kbd>+</kbd><kbd>&minus;</kbd> change the count.</p>
             </aside>
         </main>
 
         <script>
             // Resolved by Flask so the front end never hardcodes a path.
             window.INVENTORY_URL = "{{ url_for('inventory') }}";
+            window.INVENTORY_QTY_URL = "{{ url_for('update_qty') }}";
         </script>
         <script src="{{ url_for('static', filename='scripts/racks-data.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/rack.js') }}"></script>
