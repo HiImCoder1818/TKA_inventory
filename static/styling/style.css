@@ -1,0 +1,885 @@
+/* ==========================================================================
+   TKA Inventory — floor plan view
+   The plan is drawn once at a fixed aspect ratio and every element inside it
+   is positioned with percentage custom properties (--x/--y/--w/--h), so the
+   whole room scales as a single unit from a 13" laptop to a 49" monitor.
+   ========================================================================== */
+
+:root {
+    --topbar-h: 3.75rem;
+    --stage-pad: 1.25rem;
+    --panel-w: 18rem;
+
+    /* Room proportions, taken from the original layout drawing. */
+    --plan-ratio: 0.7563; /* 745 / 985 */
+
+    --bg: #11151c;
+    --bg-panel: #1a2029;
+    --bg-panel-2: #222a35;
+    --line: #313b49;
+    --text: #e8ecf2;
+    --text-dim: #93a0b1;
+    --accent: #4da3ff;
+
+    --floor: #e9edf7;
+    --wall: #1c1c1c;
+
+    --yellow: #ffef2e;
+    --tan: #f0e0ac;
+    --wood: #e0b872;
+    --orange: #f2ab3c;
+    --red: #ef2020;
+    --dark: #3a3a3a;
+    --rack: #cbcfd6;
+    --rack-dark: #9aa1ab;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+}
+
+/* ============================== Top bar ============================== */
+
+.topbar {
+    height: var(--topbar-h);
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0 1.25rem;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--line);
+}
+
+.topbar__brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex: 0 0 auto;
+}
+
+.topbar__mark {
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 0.5rem;
+    background: linear-gradient(140deg, var(--accent), #2b6fd0);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.topbar__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.breadcrumb__item--current {
+    color: var(--text);
+    font-weight: 550;
+}
+
+.breadcrumb__sep {
+    color: var(--line);
+}
+
+.breadcrumb__link {
+    color: var(--text-dim);
+    text-decoration: none;
+}
+
+.breadcrumb__link:hover,
+.breadcrumb__link:focus-visible {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+.topbar__actions {
+    margin-left: auto;
+    flex: 0 1 22rem;
+    min-width: 0;
+}
+
+.search {
+    width: 100%;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--bg-panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.82rem;
+}
+
+.search::placeholder {
+    color: #6d7a8b;
+}
+
+.search:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+}
+
+/* =============================== Stage =============================== */
+
+.stage {
+    height: calc(100dvh - var(--topbar-h));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--stage-pad);
+    padding: var(--stage-pad);
+}
+
+/* ============================= Floor plan ============================= */
+
+.plan {
+    /* Fit the room into whichever axis runs out first. */
+    --avail-h: calc(100dvh - var(--topbar-h) - var(--stage-pad) * 2);
+    --avail-w: calc(100dvw - var(--panel-w) - var(--stage-pad) * 3 - 1rem);
+    --plan-w: min(var(--avail-w), var(--avail-h) * var(--plan-ratio));
+
+    position: relative;
+    flex: 0 0 auto;
+    width: var(--plan-w);
+    aspect-ratio: var(--plan-ratio);
+
+    /* One type scale for the entire drawing. */
+    font-size: clamp(5px, calc(var(--plan-w) / 64), 20px);
+
+    border: 0.55em solid var(--wall);
+    border-radius: 0.2em;
+    background-color: var(--floor);
+    background-image:
+        repeating-linear-gradient(45deg, transparent 0 2.4%, #dfe5f2 2.4% 2.5%),
+        repeating-linear-gradient(-45deg, transparent 0 2.4%, #dfe5f2 2.4% 2.5%);
+    box-shadow: 0 1.4rem 3rem rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+}
+
+/* Shared positioning contract for everything inside the room. */
+.zone,
+.decor,
+.door {
+    position: absolute;
+    left: calc(var(--x) * 1%);
+    top: calc(var(--y) * 1%);
+    width: calc(var(--w) * 1%);
+    height: calc(var(--h) * 1%);
+}
+
+/* ------------------------------ Zones ------------------------------ */
+
+/* .zone is the painted look, shared by scenery (div) and racks (button). */
+.zone {
+    display: grid;
+    place-content: center;
+    gap: 0.05em;
+    padding: 0.1em;
+    margin: 0;
+    border: 0.12em solid #1f1f1f;
+    border-radius: 0.15em;
+    background: #fff;
+    color: #111;
+    font: inherit;
+    font-weight: 800;
+    line-height: 1.05;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+}
+
+.zone__label {
+    font-size: 0.72em;
+    overflow-wrap: anywhere;
+}
+
+/* Rotate only the caption, so the badge keeps its upright coordinate space. */
+.zone--vertical .zone__label {
+    writing-mode: vertical-rl;
+    rotate: 180deg;
+}
+
+/* A numbered rack. Only these respond to the pointer. */
+button.zone {
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+button.zone:hover,
+button.zone:focus-visible,
+button.zone.is-linked {
+    z-index: 5;
+    transform: scale(1.06);
+    box-shadow: 0 0 0 0.14em var(--accent), 0 0.3em 0.8em rgba(0, 0, 0, 0.35);
+    outline: none;
+    filter: saturate(1.15);
+}
+
+button.zone[aria-pressed="true"] {
+    z-index: 4;
+    box-shadow: 0 0 0 0.16em var(--accent), 0 0 1.2em rgba(77, 163, 255, 0.85);
+}
+
+/* Hexagonal rack number, hung off the bottom edge as in the source drawing. */
+.zone__badge {
+    position: absolute;
+    left: 50%;
+    bottom: -0.7em;
+    transform: translateX(-50%);
+    z-index: 3;
+    display: grid;
+    place-content: center;
+    min-width: 1.9em;
+    height: 1.6em;
+    padding: 0 0.35em;
+    background: #2f6fc0;
+    color: #fff;
+    font-size: 1.05em;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0;
+    clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+    /* clip-path eats borders, so the halo has to come from a filter. */
+    filter: drop-shadow(0 0 0.09em rgba(255, 255, 255, 0.95))
+            drop-shadow(0 0.06em 0.12em rgba(0, 0, 0, 0.45));
+}
+
+button.zone:hover .zone__badge,
+button.zone:focus-visible .zone__badge,
+button.zone.is-linked .zone__badge,
+button.zone[aria-pressed="true"] .zone__badge {
+    background: #1b4f96;
+}
+
+/* Racks that open a detail layout get a lighter badge and a leading edge. */
+button.zone.is-navigable .zone__badge {
+    background: linear-gradient(#4da3ff, #2f6fc0);
+    box-shadow: none;
+}
+
+button.zone.is-navigable::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 0.14em dashed rgba(47, 111, 192, 0.75);
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+/* An invisible hit area — used where the shape underneath is the artwork. */
+.zone--bare {
+    place-content: stretch;
+    border: none;
+    background: none;
+    border-radius: 0.3em;
+}
+
+/* Sheet stock: caption above, stacked panel bars below. */
+.zone--stack {
+    grid-template-rows: auto 1fr;
+    place-content: stretch;
+    padding: 0;
+}
+
+.zone--stack .zone__label {
+    padding: 0.2em 0;
+}
+
+.zone__bars {
+    background: repeating-linear-gradient(90deg, #1e1e1e 0 12%, #cfd4dc 12% 25%);
+    border-top: 0.12em solid #1e1e1e;
+}
+
+/* Fill treatments -------------------------------------------------- */
+
+.zone--tent {
+    background: var(--yellow);
+    border-color: #b08a2a;
+    box-shadow: inset 0 0 0 0.16em var(--tan);
+}
+
+.zone--dollies {
+    background: var(--orange);
+    border-color: #8d5f13;
+    box-shadow: inset 0 0 0 0.12em var(--yellow);
+}
+
+.zone--mark {
+    background: var(--yellow);
+    border-color: #1f1f1f;
+}
+
+.zone--field {
+    background: #fff;
+    color: #c00;
+}
+
+.zone--field .zone__label--mark {
+    background: var(--yellow);
+    color: #c00;
+    padding: 0 0.15em;
+}
+
+.zone--dark {
+    background: linear-gradient(#4d4d4d, #2f2f2f);
+    border-color: #0d0d0d;
+    color: #fff;
+}
+
+.zone--wood {
+    background: var(--tan);
+    border-color: #b09a55;
+}
+
+.zone--bench {
+    background: linear-gradient(#e8bf7c, var(--wood));
+    border-color: #8a6626;
+}
+
+.zone--mesh {
+    background-color: #b9bec6;
+    background-image:
+        repeating-linear-gradient(0deg, #7d838c 0 0.08em, transparent 0.08em 0.34em),
+        repeating-linear-gradient(90deg, #7d838c 0 0.08em, transparent 0.08em 0.34em);
+    border-color: #24282e;
+    color: #111;
+    text-shadow: 0 0 0.2em #fff, 0 0 0.2em #fff;
+}
+
+/* Shelving racks: gray blocks with fine shelf lines.
+   Stripes are sized in em so they thicken with the plan instead of
+   disappearing into sub-pixel rounding on smaller displays. */
+.zone--rack {
+    background-color: var(--rack);
+    background-image: repeating-linear-gradient(
+        90deg,
+        #9299a3 0 0.09em,
+        var(--rack) 0.09em 0.3em
+    );
+    border-color: #6d7480;
+    border-width: 0.09em;
+}
+
+.zone--rack-v {
+    background-image: repeating-linear-gradient(
+        0deg,
+        #9299a3 0 0.09em,
+        var(--rack) 0.09em 0.3em
+    );
+}
+
+.zone--rack-dark {
+    background-color: var(--rack-dark);
+    border-color: #3c424b;
+}
+
+/* ------------------------- Non-interactive decor ------------------------- */
+
+.decor--crate {
+    background: var(--red);
+    border: 0.1em solid #7d0d0d;
+    border-radius: 0.1em;
+}
+
+.decor--beam {
+    background: #101010;
+    border-radius: 0.1em;
+}
+
+.decor--stool {
+    background: radial-gradient(circle at 50% 40%, #4a4a4a 0 38%, #111 40% 100%);
+    border-radius: 0.25em;
+}
+
+.decor--valve {
+    border: 0.14em solid #333;
+    border-radius: 50%;
+    background: linear-gradient(#fff 0 46%, #333 46% 54%, #fff 54% 100%);
+}
+
+/* Wheel / tire stock cluster, drawn inside rack 4's hit area. */
+.wheels {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: 1fr;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.wheels i {
+    width: 100%;
+    aspect-ratio: 1;
+    max-height: 100%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #4c4c4c 0 30%, #0c0c0c 62%);
+}
+
+/* Door swing arcs — a quarter circle hinged against the nearest wall. */
+.door {
+    background: none;
+    border: 0 solid #2a2a2a;
+}
+
+.door--left {
+    border-width: 0.14em 0.14em 0 0;
+    border-radius: 0 100% 0 0;
+}
+
+.door--right {
+    border-width: 0.14em 0 0 0.14em;
+    border-radius: 100% 0 0 0;
+}
+
+/* ========================= Rack detail boards ========================= */
+
+/* Same frame language as the floor plan: dark wall, tiled ground. */
+.board {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.9rem, 2vh, 1.75rem);
+    max-width: 90rem;
+    padding: clamp(0.9rem, 1.7vw, 2.1rem);
+    border: 0.4rem solid var(--wall);
+    border-radius: 0.5rem;
+    background-color: var(--floor);
+    background-image:
+        repeating-linear-gradient(45deg, transparent 0 1.6%, #dfe5f2 1.6% 1.7%),
+        repeating-linear-gradient(-45deg, transparent 0 1.6%, #dfe5f2 1.6% 1.7%);
+    box-shadow: 0 1.4rem 3rem rgba(0, 0, 0, 0.45);
+    /* The bays own the scrolling, not the board. */
+    overflow: hidden;
+}
+
+.board--server {
+    max-width: 62rem;
+}
+
+.board__head {
+    display: flex;
+    align-items: center;
+    gap: clamp(0.7rem, 1.4vw, 1.25rem);
+    flex: 0 0 auto;
+}
+
+.board__title {
+    margin: 0;
+    color: #12161c;
+    font-size: clamp(1rem, 1.7vw, 1.9rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+}
+
+.board__sub {
+    margin: 0.15rem 0 0;
+    color: #55606f;
+    font-size: clamp(0.66rem, 0.85vw, 0.86rem);
+    letter-spacing: 0.02em;
+}
+
+/* The same hexagon as the plan badges, at heading scale. */
+.hex {
+    flex: 0 0 auto;
+    display: grid;
+    place-content: center;
+    min-width: clamp(2.2rem, 3.4vw, 3.4rem);
+    height: clamp(1.9rem, 2.9vw, 2.9rem);
+    padding: 0 0.5rem;
+    background: linear-gradient(#4da3ff, #2f6fc0);
+    color: #fff;
+    font-size: clamp(0.9rem, 1.4vw, 1.5rem);
+    font-weight: 800;
+    line-height: 1;
+    clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+
+.backlink {
+    margin-left: auto;
+    flex: 0 0 auto;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid #9aa4b3;
+    border-radius: 0.4rem;
+    background: rgba(255, 255, 255, 0.75);
+    color: #1f4e8c;
+    font-size: clamp(0.7rem, 0.9vw, 0.85rem);
+    font-weight: 650;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.backlink:hover,
+.backlink:focus-visible {
+    border-color: var(--accent);
+    background: #fff;
+    color: #12437e;
+}
+
+.board__bays {
+    flex: 1 1 auto;
+    display: grid;
+    min-height: 0;
+}
+
+/* --- Standard rack: Top / Middle / Bottom shelves, stacked ---
+   The shelf scrolls sideways, so a track can hold any number of slots. */
+
+.board--std .board__bays {
+    gap: clamp(0.7rem, 2.4vh, 2.2rem);
+    align-content: space-evenly;
+}
+
+.board--std .bay {
+    display: grid;
+    grid-template-columns: clamp(3.5rem, 7vw, 7rem) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(0.6rem, 1.3vw, 1.5rem);
+}
+
+.board--std .bay__shelf {
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-height: clamp(3rem, 9vh, 5.5rem);
+}
+
+.board--std .bay__track {
+    display: flex;
+    align-items: stretch;
+    gap: clamp(0.5rem, 1.5vw, 1.8rem);
+    min-width: min-content;
+    min-height: clamp(2.4rem, 7vh, 4rem);
+    padding: clamp(0.45rem, 1vw, 1rem);
+}
+
+/* Fixed-width slots: past a certain count the shelf scrolls instead of
+   squeezing everything thinner. */
+.board--std .slot {
+    flex: 1 0 clamp(7rem, 13vw, 13rem);
+}
+
+/* --- Server rack: Front / Back faces, side by side ---
+   The face scrolls downward, so a track can stack any number of slots. */
+
+.board--server .board__bays {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: clamp(1rem, 3vw, 3.5rem);
+}
+
+.board--server .bay {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.4rem, 1vh, 0.8rem);
+    min-height: 0;
+}
+
+.board--server .bay__shelf {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.board--server .bay__track {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    gap: clamp(0.55rem, 1.8vh, 1.7rem);
+    min-height: 100%;
+    padding: clamp(0.7rem, 1.4vw, 1.6rem);
+}
+
+.board--server .slot {
+    flex: 0 0 auto;
+    min-height: clamp(2.1rem, 5vh, 3.2rem);
+}
+
+.bay__name {
+    color: #12161c;
+    font-size: clamp(0.66rem, 1vw, 1.05rem);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.board--std .bay__name {
+    text-align: right;
+}
+
+.board--server .bay__name {
+    text-align: center;
+}
+
+/* The carcass a run of slots sits in — same hatch as the plan's racks. It
+   owns the scrollbar; .bay__track inside it holds the slots. */
+.bay__shelf {
+    border: 0.16rem solid #6d7480;
+    border-radius: 0.3rem;
+    background-color: var(--rack);
+    background-image: repeating-linear-gradient(
+        90deg,
+        #9299a3 0 1px,
+        var(--rack) 1px 5px
+    );
+    box-shadow: inset 0 0.15rem 0.5rem rgba(0, 0, 0, 0.14);
+    scrollbar-width: thin;
+    scrollbar-color: #6d7480 transparent;
+}
+
+.bay__shelf::-webkit-scrollbar {
+    width: 0.55rem;
+    height: 0.55rem;
+}
+
+.bay__shelf::-webkit-scrollbar-thumb {
+    border-radius: 0.3rem;
+    background: #6d7480;
+}
+
+.bay__shelf::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* --------------------------- Slots --------------------------- */
+
+.slot {
+    display: grid;
+    place-content: center;
+    padding: clamp(0.45rem, 1.3vh, 0.95rem) 0.6rem;
+    border: 0.12rem solid #464c55;
+    border-radius: 0.25rem;
+    background: linear-gradient(#b6bcc4, #9ba2ac);
+    color: #10141a;
+    font: inherit;
+    font-size: clamp(0.6rem, 0.9vw, 0.92rem);
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+/* Hover/keyboard only. A click opens the level below rather than latching a
+   selected state here, so nothing lingers after the pointer leaves. */
+.slot:hover,
+.slot:focus-visible,
+.slot.is-linked {
+    transform: translateY(-0.12rem);
+    box-shadow: 0 0 0 0.16rem var(--accent), 0 0.35rem 0.9rem rgba(0, 0, 0, 0.35);
+    outline: none;
+}
+
+/* An unplanned slot from the deck — visible, but clearly not filled in. */
+.slot--empty {
+    border-style: dashed;
+    background: repeating-linear-gradient(
+        45deg,
+        #c3c8d0 0 0.4rem,
+        #b3b9c2 0.4rem 0.8rem
+    );
+    color: #4d5560;
+}
+
+.board--missing {
+    display: grid;
+    place-content: center;
+}
+
+.board__missing {
+    margin: 0;
+    color: #333b46;
+    font-size: 0.95rem;
+    text-align: center;
+}
+
+/* ============================ Item index ============================ */
+
+.panel {
+    flex: 0 0 var(--panel-w);
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: 0.75rem;
+    background: var(--bg-panel);
+    min-height: 0;
+}
+
+.panel__title {
+    margin: 0 0 0.75rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-dim);
+}
+
+/* The wrapper, not the page, absorbs a long list. */
+.index-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.index {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.index thead th {
+    position: sticky;
+    top: 0;
+    padding: 0.5rem 0.6rem;
+    background: #2f6fc0;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: left;
+}
+
+.index thead th:first-child {
+    width: 3.5rem;
+    text-align: center;
+}
+
+/* Detail pages label the first column ("Front side", "Middle"), so it needs
+   more room than the floor plan's rack numbers. Everything else matches. */
+.index--wide thead th:first-child,
+.index--wide tbody th {
+    width: 6rem;
+    white-space: nowrap;
+}
+
+.index tbody tr {
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.index tbody tr:nth-child(even) {
+    background: var(--bg-panel-2);
+}
+
+.index tbody th,
+.index tbody td {
+    padding: 0.42rem 0.6rem;
+    font-weight: 500;
+    text-align: left;
+}
+
+.index tbody th {
+    width: 3.5rem;
+    text-align: center;
+    font-weight: 700;
+    color: var(--text-dim);
+}
+
+.index tbody tr:hover,
+.index tbody tr.is-linked {
+    background: #274b78;
+}
+
+.index tbody tr[aria-selected="true"] {
+    background: #2f6fc0;
+    color: #fff;
+}
+
+.index tbody tr[aria-selected="true"] th {
+    color: #fff;
+}
+
+.index__todo {
+    color: #7c8798;
+}
+
+.panel__hint {
+    margin: 0.85rem 0 0;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--line);
+    font-size: 0.72rem;
+    line-height: 1.45;
+    color: var(--text-dim);
+}
+
+/* ============================= Adaptations ============================= */
+
+/* Laptop widths: drop the index and give the room the full stage. */
+@media (max-width: 1040px) {
+    :root {
+        --panel-w: 0rem;
+    }
+
+    .panel {
+        display: none;
+    }
+}
+
+@media (max-width: 720px) {
+    :root {
+        --topbar-h: 6.5rem;
+        --stage-pad: 0.75rem;
+    }
+
+    .topbar {
+        flex-wrap: wrap;
+        align-content: center;
+        gap: 0.5rem 1rem;
+        padding: 0.5rem 0.9rem;
+    }
+
+    .topbar__actions {
+        flex-basis: 100%;
+        margin-left: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    button.zone {
+        transition: none;
+    }
+
+    button.zone:hover,
+    button.zone:focus-visible,
+    button.zone.is-linked {
+        transform: none;
+    }
+}

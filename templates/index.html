@@ -3,12 +3,222 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='styling/style.css') }}">
 
-        <title>67</title>
+        <title>TKA Inventory &middot; Floor Plan</title>
     </head>
     <body>
+        <header class="topbar">
+            <div class="topbar__brand">
+                <span class="topbar__mark">TKA</span>
+                <h1 class="topbar__title">Inventory</h1>
+            </div>
 
-        <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+            <nav class="breadcrumb" aria-label="Location">
+                <span class="breadcrumb__item">Building V</span>
+                <span class="breadcrumb__sep" aria-hidden="true">/</span>
+                <span class="breadcrumb__item breadcrumb__item--current">V-101 &middot; Robotics Storage</span>
+            </nav>
+
+            <div class="topbar__actions">
+                <input class="search" type="search" placeholder="Search for an item&hellip;" aria-label="Search inventory">
+            </div>
+        </header>
+
+        <main class="stage">
+            <!--
+                Everything in the room is placed with percentage custom
+                properties (--x/--y/--w/--h) so the plan scales as one unit.
+
+                <button class="zone"> = a numbered, clickable rack.
+                <div class="zone">    = painted scenery, not interactive.
+            -->
+            <div class="plan" role="group" aria-label="V-101 Robotics Storage floor plan">
+
+                <!-- ============ TOP WALL ============ -->
+                <div class="zone zone--tent" style="--x:2.7; --y:3.0; --w:16.1; --h:2.9">
+                    <span class="zone__label">Tent</span>
+                </div>
+                <div class="zone zone--dollies" style="--x:4.0; --y:6.3; --w:14.1; --h:2.4">
+                    <span class="zone__label">Dollies</span>
+                </div>
+                <div class="zone zone--tent" style="--x:2.7; --y:9.1; --w:16.1; --h:2.9">
+                    <span class="zone__label">Tent</span>
+                </div>
+
+                <div class="decor decor--crate" style="--x:20.8; --y:3.0; --w:3.4; --h:2.6" aria-hidden="true"></div>
+                <div class="decor decor--crate" style="--x:20.8; --y:6.3; --w:3.4; --h:2.6" aria-hidden="true"></div>
+
+                <button type="button" class="zone zone--field" style="--x:26.2; --y:3.2; --w:21.5; --h:5.7"
+                        data-rack="8" aria-label="Rack 8 — Field Material">
+                    <span class="zone__label">Field Material</span>
+                    <span class="zone__label zone__label--mark">Corner Dollies</span>
+                    <span class="zone__badge" aria-hidden="true">8</span>
+                </button>
+
+                <button type="button" class="zone zone--dark" style="--x:49.0; --y:3.0; --w:22.8; --h:4.2"
+                        data-rack="12" aria-label="Rack 12 — Outreach">
+                    <span class="zone__label">Outreach</span>
+                    <span class="zone__badge" aria-hidden="true">12</span>
+                </button>
+
+                <button type="button" class="zone zone--mesh" style="--x:72.5; --y:2.5; --w:9.1; --h:9.2"
+                        data-rack="15" aria-label="Rack 15 — Extrusions and Angles">
+                    <span class="zone__label">Metal<br>Stock</span>
+                    <span class="zone__badge" aria-hidden="true">15</span>
+                </button>
+
+                <button type="button" class="zone zone--mark zone--stack" style="--x:81.9; --y:2.2; --w:7.8; --h:8.6"
+                        data-rack="16" aria-label="Rack 16 — Panels Cart Design">
+                    <span class="zone__label">Sheet Stock</span>
+                    <span class="zone__bars" aria-hidden="true"></span>
+                    <span class="zone__badge" aria-hidden="true">16</span>
+                </button>
+
+                <div class="zone zone--wood" style="--x:90.2; --y:2.5; --w:7.8; --h:9.7"></div>
+
+                <!-- ============ LEFT WALL ============ -->
+                <button type="button" class="zone zone--bare" style="--x:2.8; --y:13.2; --w:23.0; --h:9.0"
+                        data-rack="4" aria-label="Rack 4 — Tournaments and Meets">
+                    <span class="wheels" aria-hidden="true">
+                        <i></i><i></i><i></i><i></i>
+                        <i></i><i></i><i></i><i></i>
+                    </span>
+                    <span class="zone__badge" aria-hidden="true">4</span>
+                </button>
+
+                <button type="button" class="zone zone--rack zone--rack-v" style="--x:3.0; --y:23.9; --w:4.9; --h:11.7"
+                        data-rack="3" aria-label="Rack 3 — Hardware">
+                    <span class="zone__badge" aria-hidden="true">3</span>
+                </button>
+                <button type="button" class="zone zone--rack zone--rack-v zone--rack-dark" style="--x:3.0; --y:38.1; --w:4.9; --h:5.1"
+                        data-rack="2" aria-label="Rack 2 — Hardware">
+                    <span class="zone__badge" aria-hidden="true">2</span>
+                </button>
+
+                <div class="door door--left" style="--x:4.2; --y:51.5; --w:7.0; --h:5.3" aria-hidden="true"></div>
+                <button type="button" class="zone zone--dark zone--vertical" style="--x:3.4; --y:54.3; --w:8.1; --h:10.7"
+                        data-rack="1" aria-label="Rack 1 — Parts">
+                    <span class="zone__label">Robotics Parts</span>
+                    <span class="zone__badge" aria-hidden="true">1</span>
+                </button>
+                <div class="decor decor--beam" style="--x:12.1; --y:55.6; --w:13.4; --h:0.9" aria-hidden="true"></div>
+                <div class="door door--left" style="--x:4.2; --y:65.5; --w:7.0; --h:5.3" aria-hidden="true"></div>
+
+                <!-- ============ RIGHT WALL ============ -->
+                <div class="zone zone--mark zone--vertical" style="--x:90.4; --y:13.2; --w:5.6; --h:6.6">
+                    <span class="zone__label">Wiring</span>
+                </div>
+                <div class="zone zone--mark zone--vertical" style="--x:90.4; --y:20.8; --w:5.6; --h:6.6">
+                    <span class="zone__label">Power Cords</span>
+                </div>
+                <div class="zone zone--mark zone--vertical" style="--x:90.4; --y:28.2; --w:5.6; --h:4.3">
+                    <span class="zone__label">7484</span>
+                </div>
+                <div class="zone zone--mark zone--vertical" style="--x:90.4; --y:33.5; --w:5.6; --h:5.1">
+                    <span class="zone__label">Sheets</span>
+                </div>
+
+                <div class="decor decor--valve" style="--x:92.0; --y:42.1; --w:4.0; --h:3.1" aria-hidden="true"></div>
+                <div class="door door--right" style="--x:88.8; --y:51.5; --w:7.0; --h:5.3" aria-hidden="true"></div>
+
+                <button type="button" class="zone zone--dark zone--vertical" style="--x:90.2; --y:56.3; --w:5.8; --h:9.7"
+                        data-rack="17" aria-label="Rack 17 — Tool Storage">
+                    <span class="zone__label">Robotics Tools</span>
+                    <span class="zone__badge" aria-hidden="true">17</span>
+                </button>
+
+                <!-- ============ FLOOR SHELVING ============ -->
+                <button type="button" class="zone zone--rack" style="--x:24.8; --y:28.9; --w:9.4; --h:8.1"
+                        data-rack="7" aria-label="Rack 7 — Engineering Class">
+                    <span class="zone__badge" aria-hidden="true">7</span>
+                </button>
+                <button type="button" class="zone zone--rack" style="--x:24.8; --y:40.1; --w:9.4; --h:10.7"
+                        data-rack="6" aria-label="Rack 6 — Electronics">
+                    <span class="zone__badge" aria-hidden="true">6</span>
+                </button>
+                <button type="button" class="zone zone--rack" style="--x:24.8; --y:53.8; --w:9.4; --h:12.7"
+                        data-rack="5" aria-label="Rack 5 — Tournaments and Meets">
+                    <span class="zone__badge" aria-hidden="true">5</span>
+                </button>
+
+                <button type="button" class="zone zone--rack" style="--x:49.7; --y:23.9; --w:9.4; --h:11.2"
+                        data-rack="11" aria-label="Rack 11 — JH Class">
+                    <span class="zone__badge" aria-hidden="true">11</span>
+                </button>
+                <button type="button" class="zone zone--rack" style="--x:49.7; --y:38.1; --w:9.4; --h:12.2"
+                        data-rack="10" aria-label="Rack 10 — JH Class">
+                    <span class="zone__badge" aria-hidden="true">10</span>
+                </button>
+                <button type="button" class="zone zone--rack" style="--x:49.7; --y:52.3; --w:9.4; --h:10.7"
+                        data-rack="9" aria-label="Rack 9 — JH Class">
+                    <span class="zone__badge" aria-hidden="true">9</span>
+                </button>
+
+                <button type="button" class="zone zone--rack" style="--x:73.2; --y:37.6; --w:8.7; --h:10.2"
+                        data-rack="14" aria-label="Rack 14 — Unassigned">
+                    <span class="zone__badge" aria-hidden="true">14</span>
+                </button>
+                <button type="button" class="zone zone--rack" style="--x:73.2; --y:52.8; --w:8.7; --h:10.2"
+                        data-rack="13" aria-label="Rack 13 — Unassigned">
+                    <span class="zone__badge" aria-hidden="true">13</span>
+                </button>
+
+                <!-- ============ WORKBENCH ROW ============ -->
+                <div class="decor decor--stool" style="--x:45.6; --y:81.2; --w:5.4; --h:4.2" aria-hidden="true"></div>
+                <div class="decor decor--stool" style="--x:55.0; --y:81.2; --w:5.4; --h:4.2" aria-hidden="true"></div>
+                <div class="decor decor--stool" style="--x:80.5; --y:81.2; --w:5.4; --h:4.2" aria-hidden="true"></div>
+                <div class="decor decor--stool" style="--x:90.0; --y:81.2; --w:5.4; --h:4.2" aria-hidden="true"></div>
+
+                <div class="zone zone--bench" style="--x:45.6; --y:85.8; --w:18.8; --h:7.1"></div>
+                <button type="button" class="zone zone--rack" style="--x:65.8; --y:86.8; --w:10.7; --h:4.6"
+                        data-rack="18" aria-label="Rack 18 — Stationery Supplies">
+                    <span class="zone__badge" aria-hidden="true">18</span>
+                </button>
+                <div class="zone zone--bench" style="--x:78.5; --y:85.8; --w:18.1; --h:7.1"></div>
+            </div>
+
+            <aside class="panel" aria-label="Rack index">
+                <h2 class="panel__title">Rack Index</h2>
+                <div class="index-scroll">
+                    <table class="index">
+                        <thead>
+                            <tr><th scope="col">Rack</th><th scope="col">Stored Items</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr data-rack="1"><th scope="row">1</th><td>Parts</td></tr>
+                            <tr data-rack="2"><th scope="row">2</th><td>Hardware</td></tr>
+                            <tr data-rack="3"><th scope="row">3</th><td>Hardware</td></tr>
+                            <tr data-rack="4"><th scope="row">4</th><td>Tournaments/Meets</td></tr>
+                            <tr data-rack="5"><th scope="row">5</th><td>Tournaments/Meets</td></tr>
+                            <tr data-rack="6"><th scope="row">6</th><td>Electronics/?</td></tr>
+                            <tr data-rack="7"><th scope="row">7</th><td>Engineering Class</td></tr>
+                            <tr data-rack="8"><th scope="row">8</th><td>Field Material</td></tr>
+                            <tr data-rack="9"><th scope="row">9</th><td>JH Class</td></tr>
+                            <tr data-rack="10"><th scope="row">10</th><td>JH Class</td></tr>
+                            <tr data-rack="11"><th scope="row">11</th><td>JH Class</td></tr>
+                            <tr data-rack="12"><th scope="row">12</th><td>Outreach</td></tr>
+                            <tr data-rack="13"><th scope="row">13</th><td class="index__todo">???</td></tr>
+                            <tr data-rack="14"><th scope="row">14</th><td class="index__todo">????</td></tr>
+                            <tr data-rack="15"><th scope="row">15</th><td>Extrusions/Angles</td></tr>
+                            <tr data-rack="16"><th scope="row">16</th><td>Panels Cart Design</td></tr>
+                            <tr data-rack="17"><th scope="row">17</th><td>Tool Storage</td></tr>
+                            <tr data-rack="18"><th scope="row">18</th><td>Stationery Supplies</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="panel__hint">Select a rack on the plan or in the table to drill into its contents.</p>
+            </aside>
+        </main>
+
+        <script>
+            // Route table for the rack detail pages, resolved by Flask.
+            window.RACK_ROUTES = {
+                std: "{{ url_for('std_rack') }}",
+                server: "{{ url_for('server_rack') }}",
+            };
+        </script>
+        <script src="{{ url_for('static', filename='scripts/racks-data.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/main.js') }}"></script>
     </body>
 </html>
