@@ -1,0 +1,56 @@
+{
+    "1parts": {
+        "type": "server",
+        "bins": {
+            "item class 1": {
+                "item 1": {"qty": 2},
+                "item 2": {"qty": 2},
+                "item 3": {"qty": 2}
+            },
+            "item class 2": {
+                "item 1": {"qty": 2},
+                "item 2": {"qty": 2},
+                "item 3": {"qty": 2}
+            }
+        }
+    },
+    "5Tournaments/Meets": {
+        "type": "std",
+        "top": {
+            "item class 1": {
+                "item 1": {"qty": 2},
+                "item 2": {"qty": 2},
+                "item 3": {"qty": 2}
+            },
+            "item class 2": {
+                "item 1": {"qty": 2},
+                "item 2": {"qty": 2},
+                "item 3": {"qty": 2}
+            }
+        },
+        "middle": {
+            "item class 1": {
+                "item 1": {"qty": 2},
+                "item 2": {"qty": 2},
+                "item 3": {"qty": 2}
+            },
+            "item class 2": {
+                "item 1": {"qty": 2},
+                "item 2": {"qty": 2},
+                "item 3": {"qty": 2}
+            }
+        },
+        "bottom": {
+            "item class 1": {
+                "item 1": {"qty": 2},
+                "item 2": {"qty": 2},
+                "item 3": {"qty": 2}
+            },
+            "item class 2": {
+                "item 1": {"qty": 2},
+                "item 2": {"qty": 2},
+                "item 3": {"qty": 2}
+            }
+        }
+    }
+}
