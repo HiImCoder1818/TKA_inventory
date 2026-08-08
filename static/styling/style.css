@@ -460,20 +460,6 @@ button.zone.is-navigable::after {
     border-radius: 100% 0 0 0;
 }
 
-/* ------------------------------ Labels ------------------------------ */
-
-.room-code {
-    position: absolute;
-    left: 50%;
-    bottom: 0.4em;
-    transform: translateX(-50%);
-    color: #1a1a1a;
-    font-size: 1.7em;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    pointer-events: none;
-}
-
 /* ========================= Rack detail boards ========================= */
 
 /* Same frame language as the floor plan: dark wall, tiled ground. */
@@ -493,7 +479,8 @@ button.zone.is-navigable::after {
         repeating-linear-gradient(45deg, transparent 0 1.6%, #dfe5f2 1.6% 1.7%),
         repeating-linear-gradient(-45deg, transparent 0 1.6%, #dfe5f2 1.6% 1.7%);
     box-shadow: 0 1.4rem 3rem rgba(0, 0, 0, 0.45);
-    overflow: auto;
+    /* The bays own the scrolling, not the board. */
+    overflow: hidden;
 }
 
 .board--server {
@@ -567,7 +554,8 @@ button.zone.is-navigable::after {
     min-height: 0;
 }
 
-/* --- Standard rack: Top / Middle / Bottom shelves, stacked --- */
+/* --- Standard rack: Top / Middle / Bottom shelves, stacked ---
+   The shelf scrolls sideways, so a track can hold any number of slots. */
 
 .board--std .board__bays {
     gap: clamp(0.7rem, 2.4vh, 2.2rem);
@@ -582,19 +570,28 @@ button.zone.is-navigable::after {
 }
 
 .board--std .bay__shelf {
-    display: flex;
-    align-items: center;
-    gap: clamp(0.5rem, 1.5vw, 1.8rem);
+    overflow-x: auto;
+    overflow-y: hidden;
     min-height: clamp(3rem, 9vh, 5.5rem);
+}
+
+.board--std .bay__track {
+    display: flex;
+    align-items: stretch;
+    gap: clamp(0.5rem, 1.5vw, 1.8rem);
+    min-width: min-content;
+    min-height: clamp(2.4rem, 7vh, 4rem);
     padding: clamp(0.45rem, 1vw, 1rem);
 }
 
-.board--std .bay__shelf .slot {
-    flex: 1 1 0;
-    min-width: 0;
+/* Fixed-width slots: past a certain count the shelf scrolls instead of
+   squeezing everything thinner. */
+.board--std .slot {
+    flex: 1 0 clamp(7rem, 13vw, 13rem);
 }
 
-/* --- Server rack: Front / Back faces, side by side --- */
+/* --- Server rack: Front / Back faces, side by side ---
+   The face scrolls downward, so a track can stack any number of slots. */
 
 .board--server .board__bays {
     grid-auto-flow: column;
@@ -611,11 +608,23 @@ button.zone.is-navigable::after {
 
 .board--server .bay__shelf {
     flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.board--server .bay__track {
     display: flex;
     flex-direction: column;
     justify-content: space-evenly;
     gap: clamp(0.55rem, 1.8vh, 1.7rem);
+    min-height: 100%;
     padding: clamp(0.7rem, 1.4vw, 1.6rem);
+}
+
+.board--server .slot {
+    flex: 0 0 auto;
+    min-height: clamp(2.1rem, 5vh, 3.2rem);
 }
 
 .bay__name {
@@ -634,7 +643,8 @@ button.zone.is-navigable::after {
     text-align: center;
 }
 
-/* The carcass a row of slots sits in — same hatch as the plan's racks. */
+/* The carcass a run of slots sits in — same hatch as the plan's racks. It
+   owns the scrollbar; .bay__track inside it holds the slots. */
 .bay__shelf {
     border: 0.16rem solid #6d7480;
     border-radius: 0.3rem;
@@ -645,6 +655,22 @@ button.zone.is-navigable::after {
         var(--rack) 1px 5px
     );
     box-shadow: inset 0 0.15rem 0.5rem rgba(0, 0, 0, 0.14);
+    scrollbar-width: thin;
+    scrollbar-color: #6d7480 transparent;
+}
+
+.bay__shelf::-webkit-scrollbar {
+    width: 0.55rem;
+    height: 0.55rem;
+}
+
+.bay__shelf::-webkit-scrollbar-thumb {
+    border-radius: 0.3rem;
+    background: #6d7480;
+}
+
+.bay__shelf::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 /* --------------------------- Slots --------------------------- */
@@ -669,18 +695,14 @@ button.zone.is-navigable::after {
     transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
 
+/* Hover/keyboard only. A click opens the level below rather than latching a
+   selected state here, so nothing lingers after the pointer leaves. */
 .slot:hover,
 .slot:focus-visible,
 .slot.is-linked {
     transform: translateY(-0.12rem);
     box-shadow: 0 0 0 0.16rem var(--accent), 0 0.35rem 0.9rem rgba(0, 0, 0, 0.35);
     outline: none;
-}
-
-.slot[aria-pressed="true"] {
-    border-color: #1b4f96;
-    background: linear-gradient(#4da3ff, #2f6fc0);
-    color: #fff;
 }
 
 /* An unplanned slot from the deck — visible, but clearly not filled in. */
@@ -756,9 +778,16 @@ button.zone.is-navigable::after {
 }
 
 .index thead th:first-child {
-    width: 1%;
-    white-space: nowrap;
+    width: 3.5rem;
     text-align: center;
+}
+
+/* Detail pages label the first column ("Front side", "Middle"), so it needs
+   more room than the floor plan's rack numbers. Everything else matches. */
+.index--wide thead th:first-child,
+.index--wide tbody th {
+    width: 6rem;
+    white-space: nowrap;
 }
 
 .index tbody tr {
@@ -778,8 +807,7 @@ button.zone.is-navigable::after {
 }
 
 .index tbody th {
-    width: 1%;
-    white-space: nowrap;
+    width: 3.5rem;
     text-align: center;
     font-weight: 700;
     color: var(--text-dim);
@@ -801,13 +829,6 @@ button.zone.is-navigable::after {
 
 .index__todo {
     color: #7c8798;
-}
-
-/* Rows whose rack opens a detail layout. */
-.index tbody tr.is-navigable td::after {
-    content: " ›";
-    color: var(--accent);
-    font-weight: 700;
 }
 
 .panel__hint {

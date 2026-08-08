@@ -20,7 +20,7 @@
                 <a class="breadcrumb__item breadcrumb__link" href="{{ url_for('index') }}">V-101 &middot; Robotics Storage</a>
                 <span class="breadcrumb__sep" aria-hidden="true">/</span>
                 <span class="breadcrumb__item breadcrumb__item--current">
-                    Rack <span data-fill="number">—</span> &middot; <span data-fill="items">—</span>
+                    Rack <span data-fill="number">&mdash;</span> &middot; <span data-fill="items">&mdash;</span>
                 </span>
             </nav>
 
@@ -30,31 +30,40 @@
         </header>
 
         <main class="stage">
+            <!--
+                Server rack: Front side / Back side faces.
+
+                Each face is  .bay__shelf (the carcass, scrolls down)
+                wrapping      .bay__track (the column of slots, grows down).
+                Appending a slot to a track is all it takes to add an item —
+                the face starts scrolling on its own once the track is taller.
+
+                rack.js builds these from the registry.
+            -->
             <div class="board board--server">
                 <div class="board__head">
-                    <span class="hex" aria-hidden="true" data-fill="number">—</span>
+                    <span class="hex" aria-hidden="true" data-fill="number">&mdash;</span>
                     <div>
-                        <h2 class="board__title" data-fill="items">—</h2>
+                        <h2 class="board__title" data-fill="items">&mdash;</h2>
                         <p class="board__sub">Server rack &middot; front and back faces</p>
                     </div>
                     <a class="backlink" href="{{ url_for('index') }}">&larr; Floor plan</a>
                 </div>
 
-                <!-- Faces are drawn from the registry by rack.js. -->
                 <div class="board__bays"></div>
             </div>
 
             <aside class="panel" aria-label="Item index">
                 <h2 class="panel__title">Item Index</h2>
                 <div class="index-scroll">
-                <table class="index">
-                    <thead>
-                        <tr><th scope="col">Face</th><th scope="col">Stored Items</th></tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+                    <table class="index index--wide">
+                        <thead>
+                            <tr><th scope="col">Face</th><th scope="col">Stored Items</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
-                <p class="panel__hint">Select a slot on the rack or in the table to drill into its items.</p>
+                <p class="panel__hint">Hover a slot on the rack or in the table to line the two up.</p>
             </aside>
         </main>
 

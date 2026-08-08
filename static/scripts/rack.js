@@ -1,6 +1,17 @@
 // Rack detail pages. Both std_rack.html and server_rack.html run this — the
 // only difference is which bay layout the registry hands back, and whether
-// .board is laid out as stacked shelves or side-by-side panels.
+// .board lays the bays out as stacked shelves or side-by-side faces.
+//
+// Slot markup is deliberately uniform for both:
+//
+//   .bay          section, one shelf or one face
+//     .bay__name  its caption
+//     .bay__shelf the carcass; owns the scrollbar
+//       .bay__track the run of slots; grows right (std) or down (server)
+//         .slot     one item class
+//
+// To add an item later, push onto the bay's slots and re-render, or append a
+// .slot straight into the track — the carcass starts scrolling on its own.
 
 const board = document.querySelector(".board");
 const bays = document.querySelector(".board__bays");
@@ -19,6 +30,19 @@ function isPlaceholder(label) {
     return label === "…" || /^\?+$/.test(label);
 }
 
+function makeSlot(bayName, label, id) {
+    const slot = document.createElement("button");
+    slot.type = "button";
+    slot.className = "slot";
+    slot.dataset.slot = id;
+    slot.textContent = label;
+    slot.setAttribute("aria-label", `${bayName}, ${label}`);
+    if (isPlaceholder(label)) {
+        slot.classList.add("slot--empty");
+    }
+    return slot;
+}
+
 function renderBays() {
     bays.innerHTML = "";
 
@@ -33,19 +57,15 @@ function renderBays() {
         const shelf = document.createElement("div");
         shelf.className = "bay__shelf";
 
+        const track = document.createElement("div");
+        track.className = "bay__track";
+        track.dataset.bay = String(bayIndex);
+
         bay.slots.forEach((label, slotIndex) => {
-            const slot = document.createElement("button");
-            slot.type = "button";
-            slot.className = "slot";
-            slot.dataset.slot = slotId(bayIndex, slotIndex);
-            slot.textContent = label;
-            slot.setAttribute("aria-label", `${bay.name}, ${label}`);
-            if (isPlaceholder(label)) {
-                slot.classList.add("slot--empty");
-            }
-            shelf.appendChild(slot);
+            track.appendChild(makeSlot(bay.name, label, slotId(bayIndex, slotIndex)));
         });
 
+        shelf.appendChild(track);
         section.append(name, shelf);
         bays.appendChild(section);
     });
@@ -75,7 +95,9 @@ function renderIndex() {
     });
 }
 
-// Highlight a slot in the board and the index at the same time.
+// Highlight a slot in the board and the index at the same time. This is the
+// only state a slot carries — clicking one is reserved for the level below,
+// so it deliberately leaves no lingering highlight behind.
 function link(slot) {
     document.querySelectorAll(".is-linked").forEach((el) => el.classList.remove("is-linked"));
     if (slot) {
@@ -85,14 +107,8 @@ function link(slot) {
     }
 }
 
-function select(slot) {
-    document.querySelectorAll(".slot").forEach((el) => {
-        el.setAttribute("aria-pressed", String(el.dataset.slot === slot));
-    });
-    document.querySelectorAll(".index tbody tr").forEach((row) => {
-        row.setAttribute("aria-selected", String(row.dataset.slot === slot));
-    });
-}
+// Where the next level down hangs off. Left inert until those views exist.
+function openSlot(/* slot */) {}
 
 function wire(root) {
     if (!root) {
@@ -102,7 +118,7 @@ function wire(root) {
     root.addEventListener("click", (event) => {
         const target = event.target.closest("[data-slot]");
         if (target) {
-            select(target.dataset.slot);
+            openSlot(target.dataset.slot);
         }
     });
 
