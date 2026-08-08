@@ -8,7 +8,7 @@
 :root {
     --topbar-h: 3.75rem;
     --stage-pad: 1.25rem;
-    --legend-w: 13rem;
+    --panel-w: 18rem;
 
     /* Room proportions, taken from the original layout drawing. */
     --plan-ratio: 0.7563; /* 745 / 985 */
@@ -153,7 +153,7 @@ body {
 .plan {
     /* Fit the room into whichever axis runs out first. */
     --avail-h: calc(100dvh - var(--topbar-h) - var(--stage-pad) * 2);
-    --avail-w: calc(100dvw - var(--legend-w) - var(--stage-pad) * 3 - 1rem);
+    --avail-w: calc(100dvw - var(--panel-w) - var(--stage-pad) * 3 - 1rem);
     --plan-w: min(var(--avail-w), var(--avail-h) * var(--plan-ratio));
 
     position: relative;
@@ -177,9 +177,7 @@ body {
 /* Shared positioning contract for everything inside the room. */
 .zone,
 .decor,
-.door,
-.wheels,
-.room-name {
+.door {
     position: absolute;
     left: calc(var(--x) * 1%);
     top: calc(var(--y) * 1%);
@@ -189,6 +187,7 @@ body {
 
 /* ------------------------------ Zones ------------------------------ */
 
+/* .zone is the painted look, shared by scenery (div) and racks (button). */
 .zone {
     display: grid;
     place-content: center;
@@ -205,8 +204,6 @@ body {
     text-align: center;
     text-transform: uppercase;
     letter-spacing: 0.01em;
-    cursor: pointer;
-    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
 }
 
 .zone__label {
@@ -214,8 +211,21 @@ body {
     overflow-wrap: anywhere;
 }
 
-.zone:hover,
-.zone:focus-visible {
+/* Rotate only the caption, so the badge keeps its upright coordinate space. */
+.zone--vertical .zone__label {
+    writing-mode: vertical-rl;
+    rotate: 180deg;
+}
+
+/* A numbered rack. Only these respond to the pointer. */
+button.zone {
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+button.zone:hover,
+button.zone:focus-visible,
+button.zone.is-linked {
     z-index: 5;
     transform: scale(1.06);
     box-shadow: 0 0 0 0.14em var(--accent), 0 0.3em 0.8em rgba(0, 0, 0, 0.35);
@@ -223,14 +233,64 @@ body {
     filter: saturate(1.15);
 }
 
-.zone[aria-pressed="true"] {
+button.zone[aria-pressed="true"] {
     z-index: 4;
     box-shadow: 0 0 0 0.16em var(--accent), 0 0 1.2em rgba(77, 163, 255, 0.85);
 }
 
-.zone--vertical {
-    writing-mode: vertical-rl;
-    rotate: 180deg;
+/* Hexagonal rack number, hung off the bottom edge as in the source drawing. */
+.zone__badge {
+    position: absolute;
+    left: 50%;
+    bottom: -0.7em;
+    transform: translateX(-50%);
+    z-index: 3;
+    display: grid;
+    place-content: center;
+    min-width: 1.9em;
+    height: 1.6em;
+    padding: 0 0.35em;
+    background: #2f6fc0;
+    color: #fff;
+    font-size: 1.05em;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0;
+    clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+    /* clip-path eats borders, so the halo has to come from a filter. */
+    filter: drop-shadow(0 0 0.09em rgba(255, 255, 255, 0.95))
+            drop-shadow(0 0.06em 0.12em rgba(0, 0, 0, 0.45));
+}
+
+button.zone:hover .zone__badge,
+button.zone:focus-visible .zone__badge,
+button.zone.is-linked .zone__badge,
+button.zone[aria-pressed="true"] .zone__badge {
+    background: #1b4f96;
+}
+
+/* An invisible hit area — used where the shape underneath is the artwork. */
+.zone--bare {
+    place-content: stretch;
+    border: none;
+    background: none;
+    border-radius: 0.3em;
+}
+
+/* Sheet stock: caption above, stacked panel bars below. */
+.zone--stack {
+    grid-template-rows: auto 1fr;
+    place-content: stretch;
+    padding: 0;
+}
+
+.zone--stack .zone__label {
+    padding: 0.2em 0;
+}
+
+.zone__bars {
+    background: repeating-linear-gradient(90deg, #1e1e1e 0 12%, #cfd4dc 12% 25%);
+    border-top: 0.12em solid #1e1e1e;
 }
 
 /* Fill treatments -------------------------------------------------- */
@@ -324,15 +384,6 @@ body {
     border-radius: 0.1em;
 }
 
-.decor--bars {
-    background: repeating-linear-gradient(
-        90deg,
-        #1e1e1e 0 12%,
-        #cfd4dc 12% 25%
-    );
-    border: 0.1em solid #1e1e1e;
-}
-
 .decor--beam {
     background: #101010;
     border-radius: 0.1em;
@@ -349,15 +400,17 @@ body {
     background: linear-gradient(#fff 0 46%, #333 46% 54%, #fff 54% 100%);
 }
 
-/* Wheel / tire stock cluster. */
+/* Wheel / tire stock cluster, drawn inside rack 4's hit area. */
 .wheels {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     grid-auto-rows: 1fr;
     place-items: center;
+    width: 100%;
+    height: 100%;
 }
 
-.wheels span {
+.wheels i {
     width: 100%;
     aspect-ratio: 1;
     max-height: 100%;
@@ -383,18 +436,6 @@ body {
 
 /* ------------------------------ Labels ------------------------------ */
 
-.room-name {
-    display: grid;
-    place-content: center;
-    color: #1a1a1a;
-    font-size: 2.1em;
-    font-weight: 800;
-    line-height: 1.05;
-    text-align: center;
-    letter-spacing: -0.01em;
-    pointer-events: none;
-}
-
 .room-code {
     position: absolute;
     left: 50%;
@@ -407,19 +448,21 @@ body {
     pointer-events: none;
 }
 
-/* =============================== Legend =============================== */
+/* ============================ Rack index ============================ */
 
-.legend {
-    flex: 0 0 var(--legend-w);
+.panel {
+    flex: 0 0 var(--panel-w);
     align-self: stretch;
+    display: flex;
+    flex-direction: column;
     padding: 1rem;
     border: 1px solid var(--line);
     border-radius: 0.75rem;
     background: var(--bg-panel);
-    overflow-y: auto;
+    min-height: 0;
 }
 
-.legend__title {
+.panel__title {
     margin: 0 0 0.75rem;
     font-size: 0.7rem;
     font-weight: 700;
@@ -428,39 +471,77 @@ body {
     color: var(--text-dim);
 }
 
-.legend__list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: grid;
-    gap: 0.55rem;
-    font-size: 0.78rem;
-    color: var(--text);
+.racks {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    /* The table, not the page, absorbs a long list. */
+    display: block;
+    overflow-y: auto;
+    min-height: 0;
 }
 
-.legend__list li {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
+.racks thead th {
+    position: sticky;
+    top: 0;
+    padding: 0.5rem 0.6rem;
+    background: #2f6fc0;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: left;
 }
 
-.swatch {
-    flex: 0 0 auto;
-    width: 0.9rem;
-    height: 0.9rem;
-    border: 1px solid #0f0f0f;
-    border-radius: 0.2rem;
+.racks thead th:first-child {
+    width: 3.5rem;
+    text-align: center;
 }
 
-.swatch--mark    { background: var(--yellow); }
-.swatch--rack    { background: var(--rack); }
-.swatch--dark    { background: #3a3a3a; }
-.swatch--wood    { background: var(--wood); }
-.swatch--dollies { background: var(--orange); }
-.swatch--crate   { background: var(--red); }
+.racks tbody tr {
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
 
-.legend__hint {
-    margin: 1rem 0 0;
+.racks tbody tr:nth-child(even) {
+    background: var(--bg-panel-2);
+}
+
+.racks tbody th,
+.racks tbody td {
+    padding: 0.42rem 0.6rem;
+    font-weight: 500;
+    text-align: left;
+}
+
+.racks tbody th {
+    width: 3.5rem;
+    text-align: center;
+    font-weight: 700;
+    color: var(--text-dim);
+}
+
+.racks tbody tr:hover,
+.racks tbody tr.is-linked {
+    background: #274b78;
+}
+
+.racks tbody tr[aria-selected="true"] {
+    background: #2f6fc0;
+    color: #fff;
+}
+
+.racks tbody tr[aria-selected="true"] th {
+    color: #fff;
+}
+
+.racks__todo {
+    color: #7c8798;
+}
+
+.panel__hint {
+    margin: 0.85rem 0 0;
     padding-top: 0.85rem;
     border-top: 1px solid var(--line);
     font-size: 0.72rem;
@@ -470,13 +551,13 @@ body {
 
 /* ============================= Adaptations ============================= */
 
-/* Laptop widths: drop the legend and give the room the full stage. */
-@media (max-width: 1100px) {
+/* Laptop widths: drop the index and give the room the full stage. */
+@media (max-width: 1040px) {
     :root {
-        --legend-w: 0rem;
+        --panel-w: 0rem;
     }
 
-    .legend {
+    .panel {
         display: none;
     }
 }
@@ -501,12 +582,13 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .zone {
+    button.zone {
         transition: none;
     }
 
-    .zone:hover,
-    .zone:focus-visible {
+    button.zone:hover,
+    button.zone:focus-visible,
+    button.zone.is-linked {
         transform: none;
     }
 }
