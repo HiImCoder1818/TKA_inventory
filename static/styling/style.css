@@ -782,12 +782,117 @@ button.zone.is-navigable::after {
     text-align: center;
 }
 
-/* Detail pages label the first column ("Front side", "Middle"), so it needs
-   more room than the floor plan's rack numbers. Everything else matches. */
-.index--wide thead th:first-child,
-.index--wide tbody th {
-    width: 6rem;
-    white-space: nowrap;
+/* ---- Item tree: bay > item class > items, on the rack detail pages ---- */
+
+.tree {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.tree__group {
+    display: grid;
+    gap: 0.1rem;
+}
+
+/* Reads like the table header it replaces, and stays put while scrolling. */
+.tree__group-name {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    margin: 0 0 0.3rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.3rem;
+    background: #2f6fc0;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.tree__class {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.42rem 0.55rem;
+    border-radius: 0.3rem;
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 550;
+    cursor: pointer;
+    list-style: none;
+    transition: background 0.12s ease;
+}
+
+/* Swap the native disclosure marker for one that matches the theme. */
+.tree__class::-webkit-details-marker {
+    display: none;
+}
+
+.tree__class::before {
+    content: "▸";
+    flex: 0 0 auto;
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    transition: rotate 0.12s ease;
+}
+
+.tree__node[open] > .tree__class::before {
+    rotate: 90deg;
+}
+
+.tree__class:hover,
+.tree__node.is-linked > .tree__class {
+    background: #274b78;
+}
+
+.tree__class:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.tree__class-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.tree__count {
+    flex: 0 0 auto;
+    min-width: 1.25rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 0.6rem;
+    background: var(--bg-panel-2);
+    color: var(--text-dim);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+/* Indent guide, so nesting reads at a glance like a file tree. */
+.tree__items {
+    display: grid;
+    gap: 0.08rem;
+    margin: 0.1rem 0 0.4rem 1rem;
+    padding: 0 0 0 0.7rem;
+    border-left: 1px solid var(--line);
+    list-style: none;
+}
+
+.tree__item {
+    padding: 0.28rem 0.45rem;
+    border-radius: 0.25rem;
+    color: var(--text);
+    font-size: 0.76rem;
+}
+
+.tree__item:hover {
+    background: var(--bg-panel-2);
+}
+
+.tree__item--empty {
+    color: #6d7a8b;
+    font-style: italic;
 }
 
 .index tbody tr {
