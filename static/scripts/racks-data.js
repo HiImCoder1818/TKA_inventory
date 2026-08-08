@@ -5,8 +5,22 @@
 //   type: "server" -> Front side / Back side panels      (server_rack.html)
 //   no type        -> no detail layout drawn yet
 //
-// The slot contents below are placeholders from the planning deck. Swap
-// RACKS[n].layout in from the backend once real item classes exist.
+// ---------------------------------------------------------------------------
+// Adding to a rack
+// ---------------------------------------------------------------------------
+// The shape is  rack -> bay -> item class -> items,  and each level is just a
+// list, so growing any of them is an edit in one place:
+//
+//   * a new item      -> push a string onto a class's `items`
+//   * a new class     -> push { name, items: [] } onto a bay's `slots`
+//   * a new bay       -> push { name, slots: [] } onto the layout
+//   * a whole rack    -> give it `layout: [...]` below to override the default
+//
+// A slot may also be written as a bare string ("Item class 4") when nothing is
+// catalogued in it yet; normalizeSlot() below fills in the empty items list.
+// Items are strings today — when they grow fields (quantity, owner, part
+// number) make them objects with a `name` and teach itemLabel() to read it.
+// ---------------------------------------------------------------------------
 
 const RACKS = {
     1:  { items: "Parts",               type: "server" },
@@ -29,18 +43,70 @@ const RACKS = {
     18: { items: "Stationery Supplies" },
 };
 
-// Default bay layouts, straight from the deck. "…" marks an unplanned slot.
+// Bay layouts from the planning deck. The item names are placeholders so the
+// index has something to show — replace them per rack via RACKS[n].layout.
 const DEFAULT_LAYOUT = {
     std: [
-        { name: "Top",    slots: ["Item class 1", "Item class 2", "…"] },
-        { name: "Middle", slots: ["Item class 1", "Item class 2", "…"] },
-        { name: "Bottom", slots: ["Item class 1", "Item class 2", "…"] },
+        {
+            name: "Top",
+            slots: [
+                { name: "Item class 1", items: ["Item 1", "Item 2", "Item 3"] },
+                { name: "Item class 2", items: ["Item 1", "Item 2"] },
+                "…",
+            ],
+        },
+        {
+            name: "Middle",
+            slots: [
+                { name: "Item class 1", items: ["Item 1", "Item 2"] },
+                { name: "Item class 2", items: ["Item 1", "Item 2", "Item 3"] },
+                "…",
+            ],
+        },
+        {
+            name: "Bottom",
+            slots: [
+                { name: "Item class 1", items: ["Item 1", "Item 2"] },
+                { name: "Item class 2", items: ["Item 1"] },
+                "…",
+            ],
+        },
     ],
     server: [
-        { name: "Front side", slots: ["Item class 1", "Item class 2", "Item class 3", "…"] },
-        { name: "Back side",  slots: ["Item class 1", "Item class 2", "Item class 3", "…"] },
+        {
+            name: "Front side",
+            slots: [
+                { name: "Item class 1", items: ["Item 1", "Item 2", "Item 3"] },
+                { name: "Item class 2", items: ["Item 1", "Item 2"] },
+                { name: "Item class 3", items: ["Item 1"] },
+                "…",
+            ],
+        },
+        {
+            name: "Back side",
+            slots: [
+                { name: "Item class 1", items: ["Item 1", "Item 2"] },
+                { name: "Item class 2", items: ["Item 1", "Item 2", "Item 3"] },
+                { name: "Item class 3", items: ["Item 1", "Item 2"] },
+                "…",
+            ],
+        },
     ],
 };
+
+// Accept either "Item class 4" or { name, items } so a class can be added
+// before its contents are known.
+function normalizeSlot(slot) {
+    if (typeof slot === "string") {
+        return { name: slot, items: [] };
+    }
+    return { name: slot.name, items: slot.items || [] };
+}
+
+// One place to change when items stop being plain strings.
+function itemLabel(item) {
+    return typeof item === "string" ? item : item.name;
+}
 
 function rackLayout(number) {
     const rack = RACKS[number];
