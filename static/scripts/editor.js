@@ -22,16 +22,21 @@ let onSaved = null;
 function toModel(raw) {
     return Object.entries(raw).map(([rackKey, rack]) => {
         const parsed = parseRackKey(rackKey) || { number: "", name: rackKey };
+        // Everything starts collapsed: a full inventory is hundreds of rows,
+        // and the counts on each row say what's inside without opening it.
         return {
             number: String(parsed.number),
             name: parsed.name,
             type: rack.type,
+            open: false,
             bays: Object.entries(rack)
                 .filter(([key]) => key !== "type")
                 .map(([bayKey, bay]) => ({
                     key: bayKey,
+                    open: false,
                     classes: Object.entries(bay).map(([classKey, itemClass]) => ({
                         key: classKey,
+                        open: false,
                         items: Object.entries(itemClass).map(([itemKey, item]) => ({
                             key: itemKey,
                             qty: item && item.qty != null ? item.qty : 0,
@@ -207,6 +212,30 @@ function branch(...children) {
     return el;
 }
 
+// Disclosure triangle. `open` lives on the model entry, so a redraw after an
+// add or remove doesn't throw the reader back to the top of the tree.
+function caret(entry) {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "editor__caret";
+    el.textContent = "▸";
+    el.setAttribute("aria-expanded", String(Boolean(entry.open)));
+    el.setAttribute("aria-label", entry.open ? "Collapse" : "Expand");
+    el.addEventListener("click", () => {
+        entry.open = !entry.open;
+        render();
+    });
+    return el;
+}
+
+// What a collapsed row is hiding.
+function tally(total, noun) {
+    const el = document.createElement("span");
+    el.className = "editor__count";
+    el.textContent = `${total} ${noun}${total === 1 ? "" : "s"}`;
+    return el;
+}
+
 function renderItem(itemClass, item, path) {
     const qty = document.createElement("input");
     qty.type = "number";
@@ -235,16 +264,23 @@ function renderClass(bay, itemClass, path) {
     const header = row(
         "class",
         path,
+        caret(itemClass),
         textField(itemClass.key, "bin name", (value) => { itemClass.key = value; }),
+        tally(itemClass.items.length, "item"),
         button("+", "editor__btn editor__btn--add", "Add an item to this bin", () => {
             itemClass.items.push({ key: "new item", qty: 0 });
-            render(`item:${itemClass.items.length - 1}`);
+            itemClass.open = true;
+            render();
         }),
         button("−", "editor__btn editor__btn--remove", "Remove this bin", () => {
             bay.classes.splice(bay.classes.indexOf(itemClass), 1);
             render();
         }),
     );
+
+    if (!itemClass.open) {
+        return branch(header);
+    }
 
     const items = itemClass.items.map((item, index) =>
         renderItem(itemClass, item, `${path}.${index}`));
@@ -262,9 +298,12 @@ function renderBay(rack, bay, path) {
     const header = row(
         "bay",
         path,
+        caret(bay),
         textField(bay.key, "section name", (value) => { bay.key = value; }),
+        tally(bay.classes.length, "bin"),
         button("+", "editor__btn editor__btn--add", "Add a bin to this section", () => {
-            bay.classes.push({ key: "new bin", items: [] });
+            bay.classes.push({ key: "new bin", items: [], open: true });
+            bay.open = true;
             render();
         }),
         button("−", "editor__btn editor__btn--remove", "Remove this section", () => {
@@ -272,6 +311,10 @@ function renderBay(rack, bay, path) {
             render();
         }),
     );
+
+    if (!bay.open) {
+        return branch(header);
+    }
 
     const classes = bay.classes.map((itemClass, index) =>
         renderClass(bay, itemClass, `${path}.${index}`));
@@ -289,11 +332,14 @@ function renderRack(rack, path) {
     const header = row(
         "rack",
         path,
+        caret(rack),
         rackNumberField(rack),
         textField(rack.name, "rack name", (value) => { rack.name = value; }),
         typeField(rack),
+        tally(rack.bays.length, "section"),
         button("+", "editor__btn editor__btn--add", "Add a section to this rack", () => {
-            rack.bays.push({ key: "new section", classes: [] });
+            rack.bays.push({ key: "new section", classes: [], open: true });
+            rack.open = true;
             render();
         }),
         button("−", "editor__btn editor__btn--remove", "Remove this rack", () => {
@@ -302,18 +348,24 @@ function renderRack(rack, path) {
         }),
     );
 
+    const el = rack.open
+        ? branch(header, branch(...baysOf(rack, path)))
+        : branch(header);
+    el.classList.add("editor__rack");
+    return el;
+}
+
+function baysOf(rack, path) {
     const bays = rack.bays.map((bay, index) =>
         renderBay(rack, bay, `${path}.${index}`));
+
     if (!bays.length) {
         const empty = document.createElement("p");
         empty.className = "editor__empty";
         empty.textContent = "No sections yet.";
         bays.push(empty);
     }
-
-    const el = branch(header, branch(...bays));
-    el.classList.add("editor__rack");
-    return el;
+    return bays;
 }
 
 // Structural edits redraw; typing does not, so fields keep focus.
@@ -350,10 +402,24 @@ function addRack() {
         number,
         name: (RACKS[number] || {}).items || "new rack",
         type: "std",
+        open: true,
         bays: [],
     });
     render();
     body.lastElementChild.scrollIntoView({ block: "nearest" });
+}
+
+function setAllOpen(open) {
+    model.forEach((rack) => {
+        rack.open = open;
+        rack.bays.forEach((bay) => {
+            bay.open = open;
+            bay.classes.forEach((itemClass) => {
+                itemClass.open = open;
+            });
+        });
+    });
+    render();
 }
 
 function save(saveButton) {
@@ -414,6 +480,12 @@ function initEditor(options = {}) {
     });
     dialog.querySelectorAll("[data-add-rack]").forEach((el) => {
         el.addEventListener("click", addRack);
+    });
+    dialog.querySelectorAll("[data-expand-all]").forEach((el) => {
+        el.addEventListener("click", () => setAllOpen(true));
+    });
+    dialog.querySelectorAll("[data-collapse-all]").forEach((el) => {
+        el.addEventListener("click", () => setAllOpen(false));
     });
     dialog.querySelectorAll("[data-editor-save]").forEach((el) => {
         el.addEventListener("click", () => save(el));

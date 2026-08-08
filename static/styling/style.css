@@ -1205,8 +1205,74 @@ button.zone.is-navigable::after {
     font-weight: 650;
 }
 
-.editor__close {
+.editor__toggleall {
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 0.4rem;
+    background: var(--bg-panel-2);
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.editor__toggleall:first-of-type {
     margin-left: auto;
+}
+
+.editor__toggleall:hover {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+/* Disclosure triangle, rotated when the row is open. */
+.editor__caret {
+    flex: 0 0 auto;
+    width: 1.4rem;
+    height: 1.6rem;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: none;
+    border-radius: 0.3rem;
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 0.7rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: rotate 0.12s ease, color 0.12s ease;
+}
+
+.editor__caret[aria-expanded="true"] {
+    rotate: 90deg;
+    color: var(--text);
+}
+
+.editor__caret:hover {
+    color: var(--accent);
+}
+
+.editor__caret:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+}
+
+/* What a collapsed row is hiding. */
+.editor__count {
+    flex: 0 0 auto;
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.6rem;
+    background: var(--bg-panel-2);
+    color: var(--text-dim);
+    font-size: 0.68rem;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.editor__close {
+    margin-left: 0.2rem;
     width: 1.9rem;
     height: 1.9rem;
     display: grid;
@@ -1270,6 +1336,11 @@ button.zone.is-navigable::after {
 
 .editor__row--rack .editor__name {
     font-weight: 650;
+}
+
+/* Items have no children, so no caret — indent to line up with rows that do. */
+.editor__row--item {
+    padding-left: 1.8rem;
 }
 
 .editor__name,
