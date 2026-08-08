@@ -36,13 +36,18 @@
             <div class="plan" role="group" aria-label="V-101 Robotics Storage floor plan">
 
                 <!-- ============ TOP WALL ============ -->
-                <div class="zone zone--tent" style="--x:2.7; --y:3.0; --w:16.1; --h:2.9">
+                <!--
+                    Tents and dollies belong to rack 4's tournament kit, so
+                    they light up with it. data-rack-group marks scenery that
+                    follows a rack without being clickable itself.
+                -->
+                <div class="zone zone--tent" style="--x:2.7; --y:3.0; --w:16.1; --h:2.9" data-rack-group="4">
                     <span class="zone__label">Tent</span>
                 </div>
-                <div class="zone zone--dollies" style="--x:4.0; --y:6.3; --w:14.1; --h:2.4">
+                <div class="zone zone--dollies" style="--x:4.0; --y:6.3; --w:14.1; --h:2.4" data-rack-group="4">
                     <span class="zone__label">Dollies</span>
                 </div>
-                <div class="zone zone--tent" style="--x:2.7; --y:9.1; --w:16.1; --h:2.9">
+                <div class="zone zone--tent" style="--x:2.7; --y:9.1; --w:16.1; --h:2.9" data-rack-group="4">
                     <span class="zone__label">Tent</span>
                 </div>
 

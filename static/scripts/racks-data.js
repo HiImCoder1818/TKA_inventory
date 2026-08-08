@@ -18,8 +18,9 @@
 //
 // A slot may also be written as a bare string ("Item class 4") when nothing is
 // catalogued in it yet; normalizeSlot() below fills in the empty items list.
-// Items are strings today — when they grow fields (quantity, owner, part
-// number) make them objects with a `name` and teach itemLabel() to read it.
+// An item is { name, qty } — or a bare string, which normalizeItem() reads as
+// a quantity of 1. When items grow more fields (owner, part number), add them
+// there and nothing else has to change.
 // ---------------------------------------------------------------------------
 
 const RACKS = {
@@ -50,24 +51,59 @@ const DEFAULT_LAYOUT = {
         {
             name: "Top",
             slots: [
-                { name: "Item class 1", items: ["Item 1", "Item 2", "Item 3"] },
-                { name: "Item class 2", items: ["Item 1", "Item 2"] },
+                {
+                    name: "Item class 1",
+                    items: [
+                        { name: "Item 1", qty: 4 },
+                        { name: "Item 2", qty: 12 },
+                        { name: "Item 3", qty: 2 },
+                    ],
+                },
+                {
+                    name: "Item class 2",
+                    items: [
+                        { name: "Item 1", qty: 6 },
+                        { name: "Item 2", qty: 1 },
+                    ],
+                },
                 "…",
             ],
         },
         {
             name: "Middle",
             slots: [
-                { name: "Item class 1", items: ["Item 1", "Item 2"] },
-                { name: "Item class 2", items: ["Item 1", "Item 2", "Item 3"] },
+                {
+                    name: "Item class 1",
+                    items: [
+                        { name: "Item 1", qty: 8 },
+                        { name: "Item 2", qty: 3 },
+                    ],
+                },
+                {
+                    name: "Item class 2",
+                    items: [
+                        { name: "Item 1", qty: 24 },
+                        { name: "Item 2", qty: 5 },
+                        { name: "Item 3", qty: 9 },
+                    ],
+                },
                 "…",
             ],
         },
         {
             name: "Bottom",
             slots: [
-                { name: "Item class 1", items: ["Item 1", "Item 2"] },
-                { name: "Item class 2", items: ["Item 1"] },
+                {
+                    name: "Item class 1",
+                    items: [
+                        { name: "Item 1", qty: 2 },
+                        { name: "Item 2", qty: 7 },
+                    ],
+                },
+                {
+                    name: "Item class 2",
+                    items: [{ name: "Item 1", qty: 15 }],
+                },
                 "…",
             ],
         },
@@ -76,18 +112,53 @@ const DEFAULT_LAYOUT = {
         {
             name: "Front side",
             slots: [
-                { name: "Item class 1", items: ["Item 1", "Item 2", "Item 3"] },
-                { name: "Item class 2", items: ["Item 1", "Item 2"] },
-                { name: "Item class 3", items: ["Item 1"] },
+                {
+                    name: "Item class 1",
+                    items: [
+                        { name: "Item 1", qty: 10 },
+                        { name: "Item 2", qty: 4 },
+                        { name: "Item 3", qty: 1 },
+                    ],
+                },
+                {
+                    name: "Item class 2",
+                    items: [
+                        { name: "Item 1", qty: 6 },
+                        { name: "Item 2", qty: 18 },
+                    ],
+                },
+                {
+                    name: "Item class 3",
+                    items: [{ name: "Item 1", qty: 3 }],
+                },
                 "…",
             ],
         },
         {
             name: "Back side",
             slots: [
-                { name: "Item class 1", items: ["Item 1", "Item 2"] },
-                { name: "Item class 2", items: ["Item 1", "Item 2", "Item 3"] },
-                { name: "Item class 3", items: ["Item 1", "Item 2"] },
+                {
+                    name: "Item class 1",
+                    items: [
+                        { name: "Item 1", qty: 5 },
+                        { name: "Item 2", qty: 2 },
+                    ],
+                },
+                {
+                    name: "Item class 2",
+                    items: [
+                        { name: "Item 1", qty: 11 },
+                        { name: "Item 2", qty: 7 },
+                        { name: "Item 3", qty: 20 },
+                    ],
+                },
+                {
+                    name: "Item class 3",
+                    items: [
+                        { name: "Item 1", qty: 1 },
+                        { name: "Item 2", qty: 9 },
+                    ],
+                },
                 "…",
             ],
         },
@@ -103,9 +174,12 @@ function normalizeSlot(slot) {
     return { name: slot.name, items: slot.items || [] };
 }
 
-// One place to change when items stop being plain strings.
-function itemLabel(item) {
-    return typeof item === "string" ? item : item.name;
+// Accept either "Item 1" or { name, qty }. A bare string counts as one.
+function normalizeItem(item) {
+    if (typeof item === "string") {
+        return { name: item, qty: 1 };
+    }
+    return { name: item.name, qty: item.qty == null ? 1 : item.qty };
 }
 
 function rackLayout(number) {

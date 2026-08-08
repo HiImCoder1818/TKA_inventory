@@ -231,7 +231,20 @@ body {
 /* A numbered rack. Only these respond to the pointer. */
 button.zone {
     cursor: pointer;
+}
+
+.zone {
     transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+/* Scenery that follows a rack (data-rack-group). Outlined rather than
+   box-shadowed, so fills like the tent's inset frame survive. */
+.zone.is-linked:not(button) {
+    z-index: 5;
+    transform: scale(1.06);
+    outline: 0.14em solid var(--accent);
+    outline-offset: 0.04em;
+    filter: saturate(1.15);
 }
 
 button.zone:hover,
@@ -880,10 +893,28 @@ button.zone.is-navigable::after {
 }
 
 .tree__item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
     padding: 0.28rem 0.45rem;
     border-radius: 0.25rem;
     color: var(--text);
     font-size: 0.76rem;
+}
+
+.tree__item-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* How many of this item are on hand. */
+.tree__qty {
+    flex: 0 0 auto;
+    color: var(--accent);
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
 }
 
 .tree__item:hover {

@@ -11,14 +11,16 @@ function rackLabel(rack) {
     return (RACKS[rack] || {}).items || `Rack ${rack}`;
 }
 
-// Highlight a rack in both views at once.
+// Highlight a rack in both views at once, along with any scenery tagged as
+// part of it (rack 4's tents and dollies, say) via data-rack-group.
 function link(rack) {
     document.querySelectorAll(".is-linked").forEach((el) => {
         el.classList.remove("is-linked");
     });
 
     if (rack) {
-        document.querySelectorAll(`[data-rack="${rack}"]`).forEach((el) => {
+        const selector = `[data-rack="${rack}"], [data-rack-group="${rack}"]`;
+        document.querySelectorAll(selector).forEach((el) => {
             el.classList.add("is-linked");
         });
     }

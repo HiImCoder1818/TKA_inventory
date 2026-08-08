@@ -43,6 +43,7 @@ function makeSlot(bayName, slot, id) {
     el.dataset.slot = id;
     el.textContent = slot.name;
     el.setAttribute("aria-label", `${bayName}, ${slot.name}, ${slot.items.length} items`);
+    el.setAttribute("aria-expanded", "false");
     if (isPlaceholder(slot.name)) {
         el.classList.add("slot--empty");
     }
@@ -102,10 +103,22 @@ function makeNode(bayName, slot, id) {
     list.className = "tree__items";
 
     if (slot.items.length) {
-        slot.items.forEach((item) => {
+        slot.items.forEach((raw) => {
+            const item = normalizeItem(raw);
+
             const li = document.createElement("li");
             li.className = "tree__item";
-            li.textContent = itemLabel(item);
+
+            const name = document.createElement("span");
+            name.className = "tree__item-name";
+            name.textContent = item.name;
+
+            // How many of this item we hold.
+            const qty = document.createElement("span");
+            qty.className = "tree__qty";
+            qty.textContent = `×${item.qty}`;
+
+            li.append(name, qty);
             list.appendChild(li);
         });
     } else {
@@ -139,9 +152,9 @@ function renderIndex() {
     });
 }
 
-// Highlight an item class in the rack and the index at the same time. This is
-// the only state a slot carries — clicking one is reserved for the level
-// below, so it deliberately leaves no lingering highlight behind.
+// Highlight an item class in the rack and the index at the same time. Slots
+// keep no selected background of their own — a click opens the class rather
+// than latching, leaving room for the levels below.
 function link(slot) {
     document.querySelectorAll(".is-linked").forEach((el) => el.classList.remove("is-linked"));
     if (slot) {
@@ -151,8 +164,30 @@ function link(slot) {
     }
 }
 
-// Where the next level down hangs off. Left inert until those views exist.
-function openSlot(/* slot */) {}
+// Clicking an item class on the rack works the dropdown in the index, so the
+// big box and the tree row are two handles on the same thing.
+function toggleSlot(slot) {
+    const node = document.querySelector(`.tree__node[data-slot="${slot}"]`);
+    if (!node) {
+        return;
+    }
+    node.open = !node.open;
+
+    document.querySelectorAll(`.slot[data-slot="${slot}"]`).forEach((el) => {
+        el.setAttribute("aria-expanded", String(node.open));
+    });
+
+    if (node.open) {
+        node.scrollIntoView({ block: "nearest" });
+    }
+}
+
+// Keep the rack box in step when the dropdown is worked from the index side.
+function syncSlotState(node) {
+    document.querySelectorAll(`.slot[data-slot="${node.dataset.slot}"]`).forEach((el) => {
+        el.setAttribute("aria-expanded", String(node.open));
+    });
+}
 
 function wire(root) {
     if (!root) {
@@ -160,13 +195,13 @@ function wire(root) {
     }
 
     root.addEventListener("click", (event) => {
-        // Let <summary> handle its own toggle; only rack slots reach openSlot.
+        // Let <summary> handle its own toggle rather than toggling twice.
         if (event.target.closest(".tree__class")) {
             return;
         }
         const target = event.target.closest("[data-slot]");
         if (target) {
-            openSlot(target.dataset.slot);
+            toggleSlot(target.dataset.slot);
         }
     });
 
@@ -199,4 +234,8 @@ if (!rack || !layout) {
     renderIndex();
     wire(board);
     wire(tree);
+
+    tree.querySelectorAll(".tree__node").forEach((node) => {
+        node.addEventListener("toggle", () => syncSlotState(node));
+    });
 }
