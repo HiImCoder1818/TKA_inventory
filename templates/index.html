@@ -180,9 +180,10 @@
                 <div class="room-code">V &ndash; 101</div>
             </div>
 
-            <aside class="panel" aria-label="Rack index">
-                <h2 class="panel__title">Rack Index</h2>
-                <table class="racks">
+            <aside class="panel" aria-label="Item index">
+                <h2 class="panel__title">Item Index</h2>
+                <div class="index-scroll">
+                <table class="index">
                     <thead>
                         <tr><th scope="col">Rack</th><th scope="col">Stored Items</th></tr>
                     </thead>
@@ -199,18 +200,27 @@
                         <tr data-rack="10"><th scope="row">10</th><td>JH Class</td></tr>
                         <tr data-rack="11"><th scope="row">11</th><td>JH Class</td></tr>
                         <tr data-rack="12"><th scope="row">12</th><td>Outreach</td></tr>
-                        <tr data-rack="13"><th scope="row">13</th><td class="racks__todo">???</td></tr>
-                        <tr data-rack="14"><th scope="row">14</th><td class="racks__todo">????</td></tr>
+                        <tr data-rack="13"><th scope="row">13</th><td class="index__todo">???</td></tr>
+                        <tr data-rack="14"><th scope="row">14</th><td class="index__todo">????</td></tr>
                         <tr data-rack="15"><th scope="row">15</th><td>Extrusions/Angles</td></tr>
                         <tr data-rack="16"><th scope="row">16</th><td>Panels Cart Design</td></tr>
                         <tr data-rack="17"><th scope="row">17</th><td>Tool Storage</td></tr>
                         <tr data-rack="18"><th scope="row">18</th><td>Stationery Supplies</td></tr>
                     </tbody>
                 </table>
+                </div>
                 <p class="panel__hint">Select a rack on the plan or in the table to drill into its contents.</p>
             </aside>
         </main>
 
+        <script>
+            // Route table for the rack detail pages, resolved by Flask.
+            window.RACK_ROUTES = {
+                std: "{{ url_for('std_rack') }}",
+                server: "{{ url_for('server_rack') }}",
+            };
+        </script>
+        <script src="{{ url_for('static', filename='scripts/racks-data.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/main.js') }}"></script>
     </body>
 </html>

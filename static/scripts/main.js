@@ -1,19 +1,14 @@
-// Floor plan interaction. The plan and the rack index are two views of the
-// same 18 racks, keyed by data-rack. For now selection only drives the
-// breadcrumb — the hierarchy drill-in (rack -> shelf -> item) hooks in here.
+// Floor plan interaction. The plan and the item index are two views of the
+// same 18 racks, keyed by data-rack. Racks with a detail layout open it on
+// click; the rest just select, until their layout is drawn.
 
 const plan = document.querySelector(".plan");
-const table = document.querySelector(".racks tbody");
+const table = document.querySelector(".index tbody");
 const breadcrumb = document.querySelector(".breadcrumb__item--current");
 const roomLabel = breadcrumb ? breadcrumb.textContent : "";
 
-function zonesFor(rack) {
-    return document.querySelectorAll(`[data-rack="${rack}"]`);
-}
-
 function rackLabel(rack) {
-    const row = document.querySelector(`.racks tbody tr[data-rack="${rack}"] td`);
-    return row ? row.textContent.trim() : `Rack ${rack}`;
+    return (RACKS[rack] || {}).items || `Rack ${rack}`;
 }
 
 // Highlight a rack in both views at once.
@@ -23,7 +18,9 @@ function link(rack) {
     });
 
     if (rack) {
-        zonesFor(rack).forEach((el) => el.classList.add("is-linked"));
+        document.querySelectorAll(`[data-rack="${rack}"]`).forEach((el) => {
+            el.classList.add("is-linked");
+        });
     }
 }
 
@@ -32,15 +29,22 @@ function select(rack) {
         zone.setAttribute("aria-pressed", String(zone.dataset.rack === rack));
     });
 
-    document.querySelectorAll(".racks tbody tr").forEach((row) => {
+    document.querySelectorAll(".index tbody tr").forEach((row) => {
         row.setAttribute("aria-selected", String(row.dataset.rack === rack));
     });
 
     if (breadcrumb) {
         breadcrumb.textContent = `${roomLabel} › ${rack}. ${rackLabel(rack)}`;
     }
+}
 
-    console.log("selected rack:", rack, rackLabel(rack));
+// Mark the racks that lead somewhere, in both views.
+function markNavigable() {
+    document.querySelectorAll("[data-rack]").forEach((el) => {
+        if (rackHref(el.dataset.rack)) {
+            el.classList.add("is-navigable");
+        }
+    });
 }
 
 function wire(root) {
@@ -50,9 +54,17 @@ function wire(root) {
 
     root.addEventListener("click", (event) => {
         const target = event.target.closest("[data-rack]");
-        if (target) {
-            select(target.dataset.rack);
+        if (!target) {
+            return;
         }
+
+        const href = rackHref(target.dataset.rack);
+        if (href) {
+            window.location.href = href;
+            return;
+        }
+
+        select(target.dataset.rack);
     });
 
     root.addEventListener("pointerover", (event) => {
@@ -63,5 +75,6 @@ function wire(root) {
     root.addEventListener("pointerleave", () => link(null));
 }
 
+markNavigable();
 wire(plan);
 wire(table);
