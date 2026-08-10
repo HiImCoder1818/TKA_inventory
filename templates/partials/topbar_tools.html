@@ -1,0 +1,26 @@
+{#
+    Right-hand side of the top bar: search, the mode switch, and the request
+    cart. Set `show_edit` before including to add the inventory editor button
+    (only the floor plan carries the editor dialog).
+#}
+<div class="topbar__actions">
+    <input class="search" type="search" placeholder="Search for an item&hellip;"
+           aria-label="Search inventory" autocomplete="off" role="combobox"
+           aria-expanded="false" aria-controls="search-results">
+    {# Hits are drawn by search.js as you type. #}
+    <div class="search-results" id="search-results" role="listbox"
+         aria-label="Search results" hidden></div>
+
+    <div class="modes" role="group" aria-label="Mode">
+        <button type="button" class="mode-btn" data-mode-set="edit" aria-pressed="false">Edit</button>
+        <button type="button" class="mode-btn" data-mode-set="request" aria-pressed="false">Request</button>
+    </div>
+
+    {% if show_edit %}
+        <button type="button" class="topbar__edit" data-open-editor>Edit inventory</button>
+    {% endif %}
+
+    <button type="button" class="cart-btn" data-open-cart>
+        Request <span class="cart-btn__count" data-cart-count>0</span>
+    </button>
+</div>

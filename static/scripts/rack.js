@@ -131,6 +131,12 @@ function makeItem(bay, slot, item, position) {
     const controls = document.createElement("span");
     controls.className = "tree__controls";
 
+    // Request mode's counterpart to the steppers: how many to put on the
+    // request, rather than how many are on the shelf. CSS shows one or the
+    // other off body[data-mode].
+    const request = document.createElement("span");
+    request.className = "tree__request";
+
     const entry = {
         el: li,
         qtyEl: qty,
@@ -153,7 +159,38 @@ function makeItem(bay, slot, item, position) {
     entry.minus = minus;
     controls.append(minus, plus);
 
-    li.append(name, qty, controls);
+    const want = document.createElement("input");
+    want.type = "number";
+    want.className = "tree__want";
+    want.min = "1";
+    want.value = "1";
+    want.setAttribute("aria-label", `How many ${item.name} to request`);
+
+    const addToCart = document.createElement("button");
+    addToCart.type = "button";
+    addToCart.className = "req-btn";
+    addToCart.textContent = "Add";
+    addToCart.setAttribute("aria-label", `Add ${item.name} to the request`);
+    addToCart.addEventListener("click", (event) => {
+        event.stopPropagation();
+        cartAdd({
+            rack: number,
+            rackLabel: rack.items,
+            bay: bay.key,
+            bayName: bay.name,
+            bin: slot.key,
+            binName: slot.name,
+            item: item.key,
+            itemName: item.name,
+            qty: Math.max(1, Number(want.value) || 1),
+            available: entry.qty,
+        });
+        want.value = "1";
+    });
+
+    request.append(want, addToCart);
+
+    li.append(name, qty, controls, request);
     li.addEventListener("click", () => setActive(entries.indexOf(entry), { focus: false }));
 
     entries.push(entry);
@@ -258,8 +295,9 @@ function syncSaveButton(state) {
 }
 
 // Edits are staged, not written — nothing reaches inv.json until Save.
+// Request mode is read-only, so the stock count never moves there.
 function changeQty(entry, delta) {
-    if (entry.qty <= 0 && delta < 0) {
+    if (isRequestMode() || (entry.qty <= 0 && delta < 0)) {
         return;
     }
     entry.qty = Math.max(0, entry.qty + delta);
@@ -424,16 +462,18 @@ function wireKeyboard() {
                 event.preventDefault();
                 move(-1);
                 break;
+            // Stock keys are edit-mode only; CSS hides the steppers there but
+            // the keyboard needs telling as well.
             case "+":
             case "=":
-                if (active >= 0) {
+                if (active >= 0 && !isRequestMode()) {
                     event.preventDefault();
                     changeQty(entries[active], 1);
                 }
                 break;
             case "-":
             case "_":
-                if (active >= 0) {
+                if (active >= 0 && !isRequestMode()) {
                     event.preventDefault();
                     changeQty(entries[active], -1);
                 }

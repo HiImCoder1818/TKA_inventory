@@ -1562,6 +1562,395 @@ button.zone.is-navigable::after {
     margin-top: 0;
 }
 
+/* ========================== Mode switch & cart ========================== */
+
+/* One switch decides which controls exist. The handlers check the mode too —
+   hiding a button in CSS doesn't stop a keyboard shortcut. */
+
+body[data-mode="edit"] .tree__request,
+body[data-mode="edit"] .cart-btn,
+body[data-mode="edit"] .panel__hint--request {
+    display: none;
+}
+
+body[data-mode="request"] .tree__controls,
+body[data-mode="request"] .panel .save-btn,
+body[data-mode="request"] .topbar__edit,
+body[data-mode="request"] .panel__hint--edit {
+    display: none;
+}
+
+.modes {
+    flex: 0 0 auto;
+    display: flex;
+    padding: 0.15rem;
+    border: 1px solid var(--line);
+    border-radius: 0.55rem;
+    background: var(--bg);
+}
+
+.mode-btn {
+    padding: 0.32rem 0.7rem;
+    border: none;
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 650;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.mode-btn:hover {
+    color: var(--text);
+}
+
+.mode-btn--on {
+    background: var(--accent);
+    color: #06192e;
+}
+
+.mode-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.cart-btn {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--bg-panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cart-btn:hover {
+    border-color: var(--accent);
+}
+
+.cart-btn--filled {
+    border-color: #2f6b45;
+}
+
+.cart-btn__count {
+    min-width: 1.3rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 0.6rem;
+    background: var(--line);
+    color: var(--text);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.cart-btn--filled .cart-btn__count {
+    background: #22c55e;
+    color: #06210f;
+}
+
+/* A nudge, so a second add to the same line is still visible feedback. */
+@keyframes cart-bump {
+    50% { transform: scale(1.12); }
+}
+
+.cart-btn--bump .cart-btn__count {
+    animation: cart-bump 0.24s ease;
+}
+
+/* ------------------------------ The drawer ------------------------------ */
+
+.cart {
+    position: fixed;
+    top: var(--topbar-h);
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(26rem, 92vw);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--line);
+    background: var(--bg-panel);
+    box-shadow: -1rem 0 3rem rgba(0, 0, 0, 0.5);
+}
+
+.cart[hidden] {
+    display: none;
+}
+
+.cart__head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid var(--line);
+}
+
+.cart__title {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 650;
+}
+
+.cart__count {
+    color: var(--text-dim);
+    font-size: 0.74rem;
+}
+
+.cart__close {
+    margin-left: auto;
+    width: 1.8rem;
+    height: 1.8rem;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cart__close:hover {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.cart__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0.8rem 1rem;
+    overflow-y: auto;
+}
+
+.cart__empty {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 0.76rem;
+    line-height: 1.55;
+}
+
+.cart__lines {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.cart-line {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.55rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 0.45rem;
+    background: var(--bg-panel-2);
+}
+
+.cart-line__trail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    color: var(--text-dim);
+    font-size: 0.68rem;
+}
+
+.cart-line__sep {
+    color: var(--line);
+    font-style: normal;
+}
+
+.cart-line__head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cart-line__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.cart-line__qty {
+    flex: 0 0 4rem;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--line);
+    border-radius: 0.35rem;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.76rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.cart-line__remove {
+    flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
+    display: grid;
+    place-items: center;
+    border: 1px solid #7a3535;
+    border-radius: 0.3rem;
+    background: transparent;
+    color: #f87171;
+    font: inherit;
+    font-size: 0.9rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cart-line__remove:hover {
+    background: #3a1d1d;
+}
+
+.cart-line__warn {
+    color: #fbbf24;
+    font-size: 0.68rem;
+}
+
+.cart__foot {
+    flex: 0 0 auto;
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.9rem 1rem;
+    border-top: 1px solid var(--line);
+}
+
+.cart__label {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.cart__notes {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 0.45rem;
+    background: var(--bg-panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.cart__notes:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+}
+
+.cart__status {
+    margin: 0;
+    color: #86efac;
+    font-size: 0.72rem;
+    line-height: 1.5;
+}
+
+.cart__actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.cart__clear {
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 0.45rem;
+    background: var(--bg-panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cart__clear:hover {
+    border-color: var(--accent);
+}
+
+.cart__send {
+    flex: 1 1 auto;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid #2f6b45;
+    border-radius: 0.45rem;
+    background: linear-gradient(#22c55e, #16a34a);
+    color: #06210f;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.cart__send:hover:not(:disabled) {
+    background: linear-gradient(#4ade80, #22c55e);
+}
+
+.cart__send:disabled {
+    border-color: var(--line);
+    background: var(--bg-panel-2);
+    color: var(--text-dim);
+    cursor: default;
+}
+
+/* --------------------- Request controls on an item --------------------- */
+
+.tree__request {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.tree__want {
+    width: 3rem;
+    padding: 0.16rem 0.3rem;
+    border: 1px solid var(--line);
+    border-radius: 0.25rem;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.req-btn {
+    padding: 0.2rem 0.5rem;
+    border: 1px solid #2f6b45;
+    border-radius: 0.25rem;
+    background: transparent;
+    color: #4ade80;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.req-btn:hover {
+    background: #1d3a2a;
+    color: #86efac;
+}
+
+.tree__want:focus,
+.req-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
 /* ============================= Adaptations ============================= */
 
 /* Laptop widths: drop the index and give the room the full stage. */
