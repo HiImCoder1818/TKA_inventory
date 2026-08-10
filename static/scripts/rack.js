@@ -398,13 +398,13 @@ function wire(root) {
     }
 
     root.addEventListener("click", (event) => {
-        // Let <summary> and the steppers handle their own clicks.
-        if (event.target.closest(".tree__class, .qty-btn")) {
-            return;
-        }
-        const target = event.target.closest("[data-slot]");
-        if (target) {
-            toggleSlot(target.dataset.slot);
+        // Only the box on the rack toggles a class. In the index the class
+        // header is a <summary> that toggles itself, and item rows carry the
+        // same data-slot for hover-linking — matching those too would
+        // collapse the whole class from under whatever you just clicked.
+        const box = event.target.closest(".slot");
+        if (box) {
+            toggleSlot(box.dataset.slot);
         }
     });
 
