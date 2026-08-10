@@ -140,9 +140,92 @@ body {
 }
 
 .topbar__actions {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.6rem;
+}
+
+/* ---- Search results, hung under the box ---- */
+
+.search-results {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    right: 0;
+    z-index: 20;
+    width: min(30rem, 80vw);
+    max-height: 22rem;
+    display: flex;
+    flex-direction: column;
+    padding: 0.3rem;
+    border: 1px solid var(--line);
+    border-radius: 0.6rem;
+    background: var(--bg-panel);
+    box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.55);
+    overflow-y: auto;
+}
+
+.search-results[hidden] {
+    display: none;
+}
+
+.search-hit {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.45rem 0.55rem;
+    border: none;
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.78rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.search-hit:hover,
+.search-hit[aria-selected="true"] {
+    background: #274b78;
+}
+
+.search-hit__trail {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.3rem;
+}
+
+/* The ancestors read as context; the thing you matched reads as the answer. */
+.search-hit__step {
+    color: var(--text-dim);
+}
+
+.search-hit__leaf {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.search-hit__sep {
+    color: var(--line);
+    font-style: normal;
+}
+
+.search-hit mark {
+    background: transparent;
+    color: #ffd166;
+    font-weight: 800;
+}
+
+.search-hit__qty {
+    flex: 0 0 auto;
+    color: var(--accent);
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
 }
 
 .topbar__edit {

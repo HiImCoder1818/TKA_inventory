@@ -451,7 +451,7 @@ function save(saveButton) {
         });
 }
 
-function open() {
+function openEditor() {
     // Edit a copy, so Cancel really does discard.
     loadInventory()
         .then((raw) => {
@@ -473,7 +473,7 @@ function initEditor(options = {}) {
     onSaved = options.onSaved;
 
     document.querySelectorAll("[data-open-editor]").forEach((el) => {
-        el.addEventListener("click", open);
+        el.addEventListener("click", openEditor);
     });
     dialog.querySelectorAll("[data-close-editor]").forEach((el) => {
         el.addEventListener("click", () => dialog.close());

@@ -97,7 +97,10 @@ initEditor({
 });
 
 loadInventory()
-    .then(applyToPlan)
+    .then(() => {
+        applyToPlan();
+        initSearch();
+    })
     .catch((error) => {
         console.error("inventory:", error.message);
         const hint = document.querySelector(".panel__hint");

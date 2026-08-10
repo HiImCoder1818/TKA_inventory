@@ -21,7 +21,12 @@
             </nav>
 
             <div class="topbar__actions">
-                <input class="search" type="search" placeholder="Search for an item&hellip;" aria-label="Search inventory">
+                <input class="search" type="search" placeholder="Search for an item&hellip;"
+                       aria-label="Search inventory" autocomplete="off" role="combobox"
+                       aria-expanded="false" aria-controls="search-results">
+                <!-- Hits are drawn by search.js as you type. -->
+                <div class="search-results" id="search-results" role="listbox"
+                     aria-label="Search results" hidden></div>
                 <button type="button" class="topbar__edit" data-open-editor>Edit</button>
             </div>
         </header>
@@ -245,6 +250,7 @@
             };
         </script>
         <script src="{{ url_for('static', filename='scripts/racks-data.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/search.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/editor.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/main.js') }}"></script>
     </body>

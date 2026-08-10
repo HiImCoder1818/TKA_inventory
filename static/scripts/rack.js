@@ -500,6 +500,44 @@ function render() {
     });
 }
 
+// Arriving from a search hit: open the class it named, and put the cursor on
+// the item if it named one.
+function focusFromQuery() {
+    const bay = params.get("bay");
+    const bin = params.get("bin");
+    const item = params.get("item");
+
+    if (!bay) {
+        return;
+    }
+
+    if (item) {
+        const found = entries.findIndex((entry) =>
+            entry.path.bay === bay && entry.path.itemClass === bin && entry.path.item === item);
+        if (found >= 0) {
+            setActive(found);
+            return;
+        }
+    }
+
+    const bayIndex = layout.findIndex((entry) => entry.key === bay);
+    if (bayIndex < 0) {
+        return;
+    }
+    const binIndex = bin ? layout[bayIndex].slots.findIndex((slot) => slot.key === bin) : -1;
+
+    const target = binIndex >= 0
+        ? document.querySelector(`.tree__node[data-slot="${slotId(bayIndex, binIndex)}"]`)
+        : document.querySelector(`.tree__group:nth-of-type(${bayIndex + 1})`);
+
+    if (target) {
+        if (target.tagName === "DETAILS") {
+            target.open = true;
+        }
+        target.scrollIntoView({ block: "nearest" });
+    }
+}
+
 loadInventory()
     .then(() => {
         rack = RACKS[number];
@@ -511,6 +549,8 @@ loadInventory()
             showMessage(`Rack ${number} has nothing stocked in inv.json yet.`);
         } else {
             render();
+            initSearch();
+            focusFromQuery();
         }
     })
     .catch((error) => {
