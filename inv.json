@@ -6,6 +6,12 @@
                 "item 1": {"qty": 2},
                 "item 2": {"qty": 2},
                 "item 3": {"qty": 2}
+            },
+            "item class 2": {
+                "item 1": {"qty": 5}
+            },
+            "rack 3": {
+                "item 1": {"qty": 3}
             }
         },
         "back": {

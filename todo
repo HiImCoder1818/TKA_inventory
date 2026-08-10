@@ -1,11 +1,14 @@
 Frontend
-    - Basic inventory layout
-    - Links for hierarchy
-        - Display titles for hierarchy
-        - at lowest hierarchy, display avaliable items
+    - account login for each member
+    - different modes: software/hardware (request parts), buisness (edit each part and accept requests)
+    - software/hardware:
+        - receipt of a bunch of items
+        - textbox with extra requests
+        - send request
+    - buisness:
+        - look at and accept requests
+        - edit entire the inventory
 
 Backend
-    - dynamic hierarchy
-        - adding items with sections
-        - adding more hierarchy
-    - search for item: display hierarchy path
+    - audit log, for who took what
+    - hook up inv.json to google sheets
