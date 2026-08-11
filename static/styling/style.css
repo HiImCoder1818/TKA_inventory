@@ -1588,6 +1588,24 @@ body[data-mode="request"] .panel__hint--edit {
     display: none;
 }
 
+/* Only an admin gets the switch; a pinned role sees what mode it's in. */
+body:not([data-role="admin"]) .modes,
+body[data-role="admin"] .mode-tag {
+    display: none;
+}
+
+.mode-tag {
+    flex: 0 0 auto;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--bg);
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
 .modes {
     flex: 0 0 auto;
     display: flex;

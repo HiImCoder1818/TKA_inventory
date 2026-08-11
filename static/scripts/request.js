@@ -1,10 +1,14 @@
-// Mode switch and request cart, shared by every page.
+// Mode and request cart, shared by every page.
 //
 // Edit mode    — the inventory is editable: the structural editor, the +/-
 //                steppers and the Save button are all live.
 // Request mode — the inventory is read-only. Items grow an "Add" control
 //                instead, and what you pick collects in a cart you send on
 //                with a note.
+//
+// The signed-in role picks the mode; only an admin may switch. An
+// unrecognised role gets request mode, because a role we don't know about
+// shouldn't inherit the ability to rewrite the inventory.
 //
 // Which controls appear is decided in CSS off body[data-mode], so there is
 // one switch rather than a scatter of hide/show calls. The keyboard and the
@@ -16,6 +20,13 @@
 const MODE_KEY = "tka.mode";
 const CART_KEY = "tka.cart";
 const NOTES_KEY = "tka.request-notes";
+
+// Which side of the app each role lands on.
+const ROLE_MODES = {
+    buisness: "edit",
+    software: "request",
+    hardware: "request",
+};
 
 let mode = "edit";
 let cart = [];
@@ -65,15 +76,41 @@ function saveCart() {
 
 // --------------------------------- mode ---------------------------------
 
-function setMode(next) {
+function currentRole() {
+    const account = currentAccount();
+    return account ? account.role : "";
+}
+
+// Only an admin gets a choice; everyone else is pinned by their role.
+function canSwitchMode() {
+    return currentRole() === "admin";
+}
+
+function modeForRole(role) {
+    if (role === "admin") {
+        return readStore(MODE_KEY, "edit") === "request" ? "request" : "edit";
+    }
+    return ROLE_MODES[role] || "request";
+}
+
+// `remember` is only set from the switch, which only an admin sees — so a
+// pinned role can never overwrite an admin's saved preference.
+function setMode(next, remember) {
     mode = next === "request" ? "request" : "edit";
     document.body.dataset.mode = mode;
-    writeStore(MODE_KEY, mode);
+
+    if (remember) {
+        writeStore(MODE_KEY, mode);
+    }
 
     document.querySelectorAll("[data-mode-set]").forEach((el) => {
         const on = el.dataset.modeSet === mode;
         el.classList.toggle("mode-btn--on", on);
         el.setAttribute("aria-pressed", String(on));
+    });
+
+    document.querySelectorAll("[data-mode-tag]").forEach((el) => {
+        el.textContent = isRequestMode() ? "Request mode" : "Edit mode";
     });
 
     if (!isRequestMode()) {
@@ -82,6 +119,13 @@ function setMode(next) {
 
     // Rack pages redraw their rows so the right controls are wired up.
     document.dispatchEvent(new CustomEvent("modechange", { detail: { mode } }));
+}
+
+// Signing in (or out) re-pins the mode to whatever that role is allowed.
+function applyAccount() {
+    const role = currentRole();
+    document.body.dataset.role = role;
+    setMode(modeForRole(role), false);
 }
 
 // --------------------------------- cart ---------------------------------
@@ -273,7 +317,13 @@ function initRequest() {
     }
 
     document.querySelectorAll("[data-mode-set]").forEach((el) => {
-        el.addEventListener("click", () => setMode(el.dataset.modeSet));
+        el.addEventListener("click", () => {
+            // The switch is hidden for pinned roles, but hiding a button
+            // isn't a rule — check before honouring the click.
+            if (canSwitchMode()) {
+                setMode(el.dataset.modeSet, true);
+            }
+        });
     });
     document.querySelectorAll("[data-open-cart]").forEach((el) => {
         el.addEventListener("click", openCart);
@@ -292,7 +342,9 @@ function initRequest() {
         });
     });
 
-    setMode(readStore(MODE_KEY, "edit"));
+    document.addEventListener("accountchange", applyAccount);
+
+    applyAccount();
     renderCart();
 }
 

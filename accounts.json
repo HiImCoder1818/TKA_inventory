@@ -6,5 +6,9 @@
     "Jeff": {
         "role": "buisness",
         "password": "horse"
+    },
+    "Admin": {
+        "role": "admin",
+        "password": "walrus"
     }
 }

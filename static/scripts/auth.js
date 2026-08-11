@@ -46,6 +46,11 @@ function currentAccount() {
     return account;
 }
 
+// Whoever cares what the signed-in role can do listens for this.
+function announceAccount() {
+    document.dispatchEvent(new CustomEvent("accountchange", { detail: account }));
+}
+
 // ------------------------------ the gate ------------------------------
 
 function showLogin() {
@@ -55,6 +60,7 @@ function showLogin() {
     document.querySelectorAll(".account").forEach((el) => {
         el.hidden = true;
     });
+    announceAccount();
     // Don't leave the last person's name sitting in the markup.
     document.querySelectorAll("[data-account-name], [data-account-role]").forEach((el) => {
         el.textContent = "";
@@ -79,6 +85,7 @@ function showApp() {
     document.querySelectorAll(".account").forEach((el) => {
         el.hidden = false;
     });
+    announceAccount();
 }
 
 function fail(message) {
