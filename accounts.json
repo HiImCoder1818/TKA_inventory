@@ -1,0 +1,10 @@
+{
+    "Nathan": {
+        "role": "software",
+        "password": "duck"
+    },
+    "Jeff": {
+        "role": "buisness",
+        "password": "horse"
+    }
+}
