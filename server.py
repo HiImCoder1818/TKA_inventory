@@ -1,3 +1,4 @@
+import hmac
 import json
 import os
 import re
@@ -13,6 +14,7 @@ app = Flask(__name__)
 app.json.sort_keys = False
 
 INVENTORY_PATH = Path(__file__).parent / "inv.json"
+ACCOUNTS_PATH = Path(__file__).parent / "accounts.json"
 
 # Items are single-key objects; keeping them on one line means a quantity
 # change stays a one-line diff in git.
@@ -39,6 +41,40 @@ def write_inventory(data):
     except Exception:
         Path(temp_path).unlink(missing_ok=True)
         raise
+
+
+@app.post("/api/login")
+def login():
+    """Check a name and password against accounts.json.
+
+    There is no session yet, so this only answers "are these credentials
+    good?" — it does not protect anything. The other endpoints stay open,
+    and the login is a gate on the UI rather than on the data.
+    """
+    payload = request.get_json(silent=True) or {}
+    name = payload.get("name")
+    password = payload.get("password")
+
+    if not isinstance(name, str) or not isinstance(password, str):
+        return jsonify({"error": "name and password are required"}), 400
+
+    try:
+        with ACCOUNTS_PATH.open(encoding="utf-8") as handle:
+            accounts = json.load(handle)
+    except FileNotFoundError:
+        return jsonify({"error": f"{ACCOUNTS_PATH.name} not found"}), 500
+    except json.JSONDecodeError as exc:
+        return jsonify({"error": f"{ACCOUNTS_PATH.name} is not valid JSON: {exc}"}), 500
+
+    account = accounts.get(name.strip())
+    stored = str(account.get("password", "")) if isinstance(account, dict) else ""
+
+    # Compare even when the name is unknown, and say the same thing either
+    # way, so the reply doesn't tell an outsider which names are real.
+    if not hmac.compare_digest(stored, password) or not account:
+        return jsonify({"error": "That name and password don't match an account."}), 401
+
+    return jsonify({"name": name.strip(), "role": account.get("role", "")})
 
 
 @app.route("/")

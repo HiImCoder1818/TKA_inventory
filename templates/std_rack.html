@@ -8,6 +8,8 @@
         <title>Rack &middot; TKA Inventory</title>
     </head>
     <body>
+        {% include "partials/login.html" %}
+
         <header class="topbar">
             <div class="topbar__brand">
                 <span class="topbar__mark">TKA</span>
@@ -67,6 +69,7 @@
 
         <script>
             // Resolved by Flask so the front end never hardcodes a path.
+            window.LOGIN_URL = "{{ url_for('login') }}";
             window.INVENTORY_URL = "{{ url_for('inventory') }}";
             window.INVENTORY_QTY_URL = "{{ url_for('update_qty') }}";
             window.RACK_ROUTES = {
@@ -74,6 +77,7 @@
                 server: "{{ url_for('server_rack') }}",
             };
         </script>
+        <script src="{{ url_for('static', filename='scripts/auth.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/racks-data.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/search.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/request.js') }}"></script>

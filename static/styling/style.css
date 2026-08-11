@@ -122,10 +122,18 @@ body {
     text-decoration: underline;
 }
 
+/* The tools take what's left and give it back to the search box first, so
+   adding a control never pushes the account off the edge. */
 .topbar__actions {
     margin-left: auto;
-    flex: 0 1 22rem;
+    flex: 1 1 auto;
     min-width: 0;
+    justify-content: flex-end;
+}
+
+.search {
+    flex: 0 1 16rem;
+    min-width: 4.5rem;
 }
 
 .search {
@@ -1949,6 +1957,183 @@ body[data-mode="request"] .panel__hint--edit {
 .req-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
+}
+
+/* ============================== Sign in ============================== */
+
+/* While the gate is up, nothing behind it is reachable — including by tab. */
+body.is-locked > *:not(.login) {
+    visibility: hidden;
+}
+
+body.is-locked {
+    overflow: hidden;
+}
+
+.login {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    background:
+        radial-gradient(60rem 40rem at 50% -10%, #1b2a3f, transparent),
+        var(--bg);
+}
+
+.login[hidden] {
+    display: none;
+}
+
+.login__card {
+    display: grid;
+    gap: 0.5rem;
+    width: min(22rem, 100%);
+    padding: 1.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.9rem;
+    background: var(--bg-panel);
+    box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.6);
+}
+
+.login__mark {
+    justify-self: start;
+    display: grid;
+    place-items: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 0.6rem;
+    background: linear-gradient(140deg, var(--accent), #2b6fd0);
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.login__title {
+    margin: 0.6rem 0 0;
+    font-size: 1.2rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+
+.login__sub {
+    margin: 0 0 0.75rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+}
+
+.login__label {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.login__field {
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--bg-panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.85rem;
+}
+
+.login__field:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+}
+
+.login__error {
+    margin: 0.15rem 0 0;
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.4rem;
+    background: #3a1d1d;
+    color: #ffc4c4;
+    font-size: 0.74rem;
+    line-height: 1.45;
+}
+
+.login__submit {
+    margin-top: 0.6rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid #2b6fd0;
+    border-radius: 0.5rem;
+    background: linear-gradient(var(--accent), #2b6fd0);
+    color: #06192e;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.login__submit:hover:not(:disabled) {
+    background: linear-gradient(#7bbcff, var(--accent));
+}
+
+.login__submit:disabled {
+    opacity: 0.7;
+    cursor: default;
+}
+
+/* ---- Who is signed in, in the top bar ---- */
+
+.account {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding-left: 0.7rem;
+    border-left: 1px solid var(--line);
+}
+
+.account[hidden] {
+    display: none;
+}
+
+.account__who {
+    display: grid;
+    min-width: 0;
+    max-width: 9rem;
+    line-height: 1.2;
+}
+
+.account__name,
+.account__role {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account__name {
+    font-size: 0.78rem;
+    font-weight: 650;
+}
+
+.account__role {
+    color: var(--text-dim);
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.account__out {
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.account__out:hover {
+    border-color: var(--accent);
+    color: var(--text);
 }
 
 /* ============================= Adaptations ============================= */

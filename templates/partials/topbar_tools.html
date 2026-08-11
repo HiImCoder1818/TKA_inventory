@@ -21,6 +21,15 @@
     {% endif %}
 
     <button type="button" class="cart-btn" data-open-cart>
-        Request <span class="cart-btn__count" data-cart-count>0</span>
+        Cart <span class="cart-btn__count" data-cart-count>0</span>
     </button>
+
+    {# Who is signed in; filled in by auth.js. #}
+    <div class="account" hidden>
+        <span class="account__who">
+            <span class="account__name" data-account-name></span>
+            <span class="account__role" data-account-role></span>
+        </span>
+        <button type="button" class="account__out" data-logout>Sign out</button>
+    </div>
 </div>

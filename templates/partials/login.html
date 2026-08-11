@@ -1,0 +1,24 @@
+{#
+    Login gate. Covers the whole page until auth.js is satisfied. There is no
+    server session yet, so this guards the interface, not the data — see
+    auth.js for what that does and doesn't buy.
+#}
+<div class="login" role="dialog" aria-modal="true" aria-labelledby="login-title" hidden>
+    <form class="login__card" data-login-form>
+        <span class="login__mark">TKA</span>
+        <h1 class="login__title" id="login-title">Inventory</h1>
+        <p class="login__sub">Sign in to continue</p>
+
+        <label class="login__label" for="login-name">Name</label>
+        <input class="login__field" id="login-name" name="name" type="text"
+               autocomplete="username" autocapitalize="none" spellcheck="false" required>
+
+        <label class="login__label" for="login-password">Password</label>
+        <input class="login__field" id="login-password" name="password" type="password"
+               autocomplete="current-password" required>
+
+        <p class="login__error" role="alert" hidden></p>
+
+        <button class="login__submit" type="submit">Sign in</button>
+    </form>
+</div>
