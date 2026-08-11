@@ -1,0 +1,9 @@
+[
+    {
+        "name": "Nathan",
+        "parts": [
+            {"path": ["1parts", "front", "item class 1", "item 1"], "qty": 2},
+            {"path": ["5Tournaments/Meets", "top", "item class 1", "item 2"], "qty": 2}
+        ]
+    }
+]
