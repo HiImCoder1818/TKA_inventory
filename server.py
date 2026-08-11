@@ -18,6 +18,7 @@ app.json.sort_keys = False
 INVENTORY_PATH = Path(__file__).parent / "inv.json"
 ACCOUNTS_PATH = Path(__file__).parent / "accounts.json"
 REQUESTS_PATH = Path(__file__).parent / "requests.json"
+HISTORY_PATH = Path(__file__).parent / "history.json"
 
 # Items are single-key objects; keeping them on one line means a quantity
 # change stays a one-line diff in git.
@@ -77,8 +78,11 @@ def read_requests():
 
 
 def dump_requests(entries):
-    """Render requests.json by hand, so each part stays on one line the way
-    the file was first written rather than being fanned out by json.dump."""
+    """Render a request list by hand, so each part stays on one line the way
+    requests.json was first written rather than being fanned out by json.dump.
+
+    Shared with history.json, which is the same shape plus resolvedAt.
+    """
     if not entries:
         return "[]\n"
 
@@ -87,6 +91,8 @@ def dump_requests(entries):
         lines.append("    {")
         for field in ("id", "name", "at", "note"):
             lines.append(f'        "{field}": {json.dumps(entry.get(field, ""))},')
+        if "resolvedAt" in entry:
+            lines.append(f'        "resolvedAt": {json.dumps(entry["resolvedAt"])},')
         lines.append('        "parts": [')
 
         parts = entry.get("parts", [])
@@ -106,6 +112,39 @@ def dump_requests(entries):
 
 def write_requests(entries):
     write_atomically(REQUESTS_PATH, dump_requests(entries))
+
+
+def read_history():
+    try:
+        with HISTORY_PATH.open(encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+    return data if isinstance(data, list) else []
+
+
+def write_history(entries):
+    write_atomically(HISTORY_PATH, dump_requests(entries))
+
+
+def log_request(entry):
+    """Append a request to the history the moment it is made.
+
+    The queue in requests.json empties as work gets done; this doesn't, so
+    there's still a record of what was asked for afterwards.
+    """
+    history = read_history()
+    history.append({**entry, "resolvedAt": None})
+    write_history(history)
+
+
+def log_resolved(request_id, when):
+    """Stamp the history entry for a request that has just been resolved."""
+    history = read_history()
+    for entry in history:
+        if entry.get("id") == request_id and not entry.get("resolvedAt"):
+            entry["resolvedAt"] = when
+    write_history(history)
 
 
 @app.post("/api/login")
@@ -361,13 +400,14 @@ def create_request():
     entries = read_requests()
     entries.append(entry)
     write_requests(entries)
+    log_request(entry)
 
     return jsonify(entry), 201
 
 
 @app.post("/api/requests/<request_id>/resolve")
 def resolve_request(request_id):
-    """Take a request off the queue.
+    """Take a request off the queue and stamp it in the history.
 
     Deliberately does not touch inv.json — marking a request done and moving
     the stock that went with it are separate steps, and only the first is
@@ -379,8 +419,21 @@ def resolve_request(request_id):
     if len(remaining) == len(entries):
         return jsonify({"error": f"no open request with id {request_id}"}), 404
 
+    when = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     write_requests(remaining)
-    return jsonify({"resolved": request_id, "open": len(remaining)})
+    log_resolved(request_id, when)
+
+    return jsonify({"resolved": request_id, "resolvedAt": when, "open": len(remaining)})
+
+
+@app.get("/api/history")
+def list_history():
+    """Every request ever made, resolved or not, oldest first.
+
+    Only an admin is shown this in the UI. With no session the server can't
+    tell who is asking, so that is a rule about the interface, not the data.
+    """
+    return jsonify(read_history())
 
 
 if __name__ == "__main__":

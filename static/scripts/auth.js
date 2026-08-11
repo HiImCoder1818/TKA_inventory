@@ -8,10 +8,16 @@
 // you walk from the floor plan into a rack and back. A reload signs you out
 // again, which is what "no sessions" gets you — the two are told apart by the
 // Navigation Timing entry, so a link click carries through and F5 does not.
+//
+// A sign-in also lapses four hours after it was made, whether or not the tab
+// has been touched, so a machine left open in the shop doesn't stay signed in
+// indefinitely. The clock runs from the sign-in, not from the last page.
 
 const AUTH_KEY = "tka.account";
+const SESSION_MS = 4 * 60 * 60 * 1000;
 
 let account = null;
+let expiryTimer = null;
 let loginPanel = null;
 let loginForm = null;
 let loginError = null;
@@ -24,7 +30,12 @@ function wasReloaded() {
 function readAccount() {
     try {
         const raw = window.sessionStorage.getItem(AUTH_KEY);
-        return raw ? JSON.parse(raw) : null;
+        const stored = raw ? JSON.parse(raw) : null;
+
+        if (!stored || !stored.until || Date.now() >= stored.until) {
+            return null;
+        }
+        return stored;
     } catch (error) {
         return null;
     }
@@ -44,6 +55,21 @@ function storeAccount(value) {
 
 function currentAccount() {
     return account;
+}
+
+// Sign out on the stroke rather than waiting for the next click, so an
+// unattended screen doesn't keep showing someone else's session.
+function scheduleExpiry() {
+    window.clearTimeout(expiryTimer);
+    if (!account) {
+        return;
+    }
+
+    const left = account.until - Date.now();
+    expiryTimer = window.setTimeout(() => {
+        signOut();
+        fail("Your sign-in lapsed after four hours. Sign in again.");
+    }, Math.max(0, left));
 }
 
 // Whoever cares what the signed-in role can do listens for this.
@@ -85,6 +111,7 @@ function showApp() {
     document.querySelectorAll(".account").forEach((el) => {
         el.hidden = false;
     });
+    scheduleExpiry();
     announceAccount();
 }
 
@@ -122,7 +149,7 @@ function submit(event) {
             return body;
         })
         .then((who) => {
-            account = who;
+            account = { ...who, until: Date.now() + SESSION_MS };
             storeAccount(account);
             loginForm.reset();
             showApp();
@@ -163,6 +190,8 @@ function initAuth() {
     if (account) {
         showApp();
     } else {
+        // Clear a lapsed entry rather than leaving it to be re-read.
+        storeAccount(null);
         showLogin();
     }
 }

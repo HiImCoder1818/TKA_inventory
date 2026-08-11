@@ -1,0 +1,18 @@
+{#
+    Everything ever requested, resolved or not. Admin only — and only in the
+    interface: with no session the server can't tell who is asking.
+#}
+<aside class="drawer history" aria-label="Request history" hidden>
+    <header class="drawer__head">
+        <h2 class="drawer__title">History</h2>
+        <span class="drawer__count"><span data-history-count>0</span> logged</span>
+        <button type="button" class="drawer__close" data-close-history aria-label="Close history">&times;</button>
+    </header>
+
+    <p class="drawer__error" data-history-error role="alert" hidden></p>
+
+    <div class="drawer__body">
+        <p class="drawer__empty" data-history-empty>Nothing logged yet.</p>
+        <div class="history__list"></div>
+    </div>
+</aside>

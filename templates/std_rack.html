@@ -67,11 +67,13 @@
 
         {% include "partials/cart.html" %}
         {% include "partials/requests.html" %}
+        {% include "partials/history.html" %}
 
         <script>
             // Resolved by Flask so the front end never hardcodes a path.
             window.LOGIN_URL = "{{ url_for('login') }}";
             window.REQUESTS_URL = "{{ url_for('list_requests') }}";
+            window.HISTORY_URL = "{{ url_for('list_history') }}";
             window.INVENTORY_URL = "{{ url_for('inventory') }}";
             window.INVENTORY_QTY_URL = "{{ url_for('update_qty') }}";
             window.RACK_ROUTES = {

@@ -2,23 +2,23 @@
     Request cart. Lines are added from the rack pages in request mode and
     kept in localStorage, so they survive walking between racks.
 #}
-<aside class="cart" aria-label="Request cart" hidden>
-    <header class="cart__head">
-        <h2 class="cart__title">Request</h2>
-        <span class="cart__count"><span data-cart-count>0</span> items</span>
-        <button type="button" class="cart__close" data-close-cart aria-label="Close request">&times;</button>
+<aside class="drawer cart" aria-label="Request cart" hidden>
+    <header class="drawer__head">
+        <h2 class="drawer__title">Request</h2>
+        <span class="drawer__count"><span data-cart-count>0</span> items</span>
+        <button type="button" class="drawer__close" data-close-cart aria-label="Close request">&times;</button>
     </header>
 
-    <div class="cart__body">
-        <p class="cart__empty">
+    <div class="drawer__body">
+        <p class="drawer__empty cart__empty">
             Nothing requested yet. In request mode, use <b>Add</b> beside an item
             to put it on this list.
         </p>
         <ul class="cart__lines" hidden></ul>
     </div>
 
-    <footer class="cart__foot">
-        <label class="cart__label" for="cart-notes">Anything the other side should know</label>
+    <footer class="drawer__foot">
+        <label class="drawer__label" for="cart-notes">Anything the other side should know</label>
         <textarea id="cart-notes" class="cart__notes" rows="3"
                   placeholder="Needed for Saturday's meet, happy to collect Friday&hellip;"></textarea>
 

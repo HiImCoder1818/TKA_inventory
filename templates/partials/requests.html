@@ -1,15 +1,19 @@
 {#
-    The queue of open part requests, for whoever is in edit mode. Filled in
-    by review.js; resolving one takes it off the queue and leaves the
-    inventory alone.
+    The queue of open part requests, for whoever is in edit mode. Same drawer
+    as the cart — the two sides of the same exchange, so they read the same.
+    Filled in by review.js; resolving one leaves the inventory alone.
 #}
-<dialog class="review" aria-label="Part requests">
-    <header class="review__head">
-        <h2 class="review__title">Requests</h2>
-        <span class="review__count"><span data-requests-count>0</span> open</span>
-        <button type="button" class="review__close" data-close-requests aria-label="Close">&times;</button>
+<aside class="drawer review" aria-label="Part requests" hidden>
+    <header class="drawer__head">
+        <h2 class="drawer__title">Requests</h2>
+        <span class="drawer__count"><span data-requests-count>0</span> open</span>
+        <button type="button" class="drawer__close" data-close-requests aria-label="Close requests">&times;</button>
     </header>
 
-    <p class="review__error" role="alert" hidden></p>
-    <div class="review__body"></div>
-</dialog>
+    <p class="drawer__error" data-requests-error role="alert" hidden></p>
+
+    <div class="drawer__body">
+        <p class="drawer__empty" data-requests-empty>No open requests.</p>
+        <div class="review__list"></div>
+    </div>
+</aside>
