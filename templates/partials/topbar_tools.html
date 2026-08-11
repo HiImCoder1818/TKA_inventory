@@ -11,12 +11,16 @@
     <div class="search-results" id="search-results" role="listbox"
          aria-label="Search results" hidden></div>
 
-    {# Admins choose; every other role is pinned, and sees the label instead. #}
+    {# Admins choose their side; every other role is pinned by its role. #}
     <div class="modes" role="group" aria-label="Mode">
         <button type="button" class="mode-btn" data-mode-set="edit" aria-pressed="false">Edit</button>
         <button type="button" class="mode-btn" data-mode-set="request" aria-pressed="false">Request</button>
     </div>
-    <span class="mode-tag" data-mode-tag></span>
+
+    {# The reviewing side of the cart: shown wherever editing is. #}
+    <button type="button" class="requests-btn" data-open-requests>
+        Requests <span class="requests-btn__count" data-requests-count>0</span>
+    </button>
 
     {% if show_edit %}
         <button type="button" class="topbar__edit" data-open-editor>Edit inventory</button>

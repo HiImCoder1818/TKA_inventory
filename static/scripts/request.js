@@ -109,10 +109,6 @@ function setMode(next, remember) {
         el.setAttribute("aria-pressed", String(on));
     });
 
-    document.querySelectorAll("[data-mode-tag]").forEach((el) => {
-        el.textContent = isRequestMode() ? "Request mode" : "Edit mode";
-    });
-
     if (!isRequestMode()) {
         closeCart();
     }
@@ -274,27 +270,69 @@ function renderCart() {
 // -------------------------------- sending --------------------------------
 
 function sendRequest() {
-    if (!cart.length) {
+    const account = currentAccount();
+
+    if (!cart.length || !account) {
         return;
     }
 
+    const button = document.querySelector("[data-send-request]");
+    const label = button ? button.textContent : "";
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Sending…";
+    }
+
+    // Parts are addressed by the raw inv.json keys, so the queue points at
+    // real entries rather than at the prettified names on screen.
     const payload = {
-        notes: cartNotes ? cartNotes.value.trim() : "",
-        lines: cart.map((line) => ({
-            rack: line.rack,
-            bay: line.bay,
-            itemClass: line.bin,
-            item: line.item,
+        name: account.name,
+        note: cartNotes ? cartNotes.value.trim() : "",
+        parts: cart.map((line) => ({
+            path: [line.rack ? RACKS[line.rack].key : "", line.bay, line.bin, line.item],
             qty: line.qty,
         })),
     };
 
-    // No endpoint yet — say so plainly rather than pretending it went out.
-    console.log("request payload:", payload);
-    cartStatus.hidden = false;
-    cartStatus.textContent =
-        `Prepared ${payload.lines.length} line${payload.lines.length === 1 ? "" : "s"} ` +
-        `(${cartTotal()} items). Sending isn't wired up yet — the payload is in the console.`;
+    fetch(window.REQUESTS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    })
+        .then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) {
+                throw new Error(body.error || `could not send (${response.status})`);
+            }
+            return body;
+        })
+        .then((entry) => {
+            const count = entry.parts.length;
+            cart = [];
+            saveCart();
+            if (cartNotes) {
+                cartNotes.value = "";
+                writeStore(NOTES_KEY, "");
+            }
+            cartStatus.hidden = false;
+            cartStatus.classList.remove("cart__status--error");
+            cartStatus.textContent =
+                `Sent ${count} line${count === 1 ? "" : "s"}. It's on the requests queue now.`;
+        })
+        .catch((error) => {
+            // The cart survives, so a failed send can just be retried.
+            console.error("requests:", error.message);
+            cartStatus.hidden = false;
+            cartStatus.classList.add("cart__status--error");
+            cartStatus.textContent = `Could not send — ${error.message}`;
+        })
+        .finally(() => {
+            if (button) {
+                button.disabled = false;
+                button.textContent = label;
+            }
+            renderCart();
+        });
 }
 
 // --------------------------------- boot ---------------------------------

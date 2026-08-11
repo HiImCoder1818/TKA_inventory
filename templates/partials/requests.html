@@ -1,0 +1,15 @@
+{#
+    The queue of open part requests, for whoever is in edit mode. Filled in
+    by review.js; resolving one takes it off the queue and leaves the
+    inventory alone.
+#}
+<dialog class="review" aria-label="Part requests">
+    <header class="review__head">
+        <h2 class="review__title">Requests</h2>
+        <span class="review__count"><span data-requests-count>0</span> open</span>
+        <button type="button" class="review__close" data-close-requests aria-label="Close">&times;</button>
+    </header>
+
+    <p class="review__error" role="alert" hidden></p>
+    <div class="review__body"></div>
+</dialog>

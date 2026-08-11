@@ -3,6 +3,8 @@ import json
 import os
 import re
 import tempfile
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
@@ -15,6 +17,7 @@ app.json.sort_keys = False
 
 INVENTORY_PATH = Path(__file__).parent / "inv.json"
 ACCOUNTS_PATH = Path(__file__).parent / "accounts.json"
+REQUESTS_PATH = Path(__file__).parent / "requests.json"
 
 # Items are single-key objects; keeping them on one line means a quantity
 # change stays a one-line diff in git.
@@ -26,21 +29,83 @@ def read_inventory():
         return json.load(handle)
 
 
+def write_atomically(path, text):
+    """Write beside the target and rename, so an interrupted save can never
+    leave a half-written file behind."""
+    handle_fd, temp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(handle_fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.replace(temp_path, path)
+    except Exception:
+        Path(temp_path).unlink(missing_ok=True)
+        raise
+
+
 def write_inventory(data):
     """Rewrite inv.json in place, preserving its layout and key order."""
     text = json.dumps(data, indent=4, ensure_ascii=False)
     text = _QTY_INLINE.sub(lambda match: '{"qty": %s}' % match.group(1), text)
+    write_atomically(INVENTORY_PATH, text + "\n")
 
-    # Write beside the target and rename, so an interrupted save can never
-    # leave a half-written inventory behind.
-    handle_fd, temp_path = tempfile.mkstemp(dir=INVENTORY_PATH.parent, suffix=".tmp")
+
+def read_requests():
+    """Open requests, with any hand-written entry given an id.
+
+    Requests are resolved by id, so an entry written straight into the file
+    without one could never be taken off the queue. Backfilling on read keeps
+    that from being a trap.
+    """
     try:
-        with os.fdopen(handle_fd, "w", encoding="utf-8") as handle:
-            handle.write(text + "\n")
-        os.replace(temp_path, INVENTORY_PATH)
-    except Exception:
-        Path(temp_path).unlink(missing_ok=True)
-        raise
+        with REQUESTS_PATH.open(encoding="utf-8") as handle:
+            data = json.load(handle)
+    except FileNotFoundError:
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    entries = [entry for entry in data if isinstance(entry, dict)]
+    missing = [entry for entry in entries if not entry.get("id")]
+    for entry in missing:
+        entry["id"] = uuid.uuid4().hex[:8]
+
+    if missing:
+        write_requests(entries)
+
+    return entries
+
+
+def dump_requests(entries):
+    """Render requests.json by hand, so each part stays on one line the way
+    the file was first written rather than being fanned out by json.dump."""
+    if not entries:
+        return "[]\n"
+
+    lines = ["["]
+    for position, entry in enumerate(entries):
+        lines.append("    {")
+        for field in ("id", "name", "at", "note"):
+            lines.append(f'        "{field}": {json.dumps(entry.get(field, ""))},')
+        lines.append('        "parts": [')
+
+        parts = entry.get("parts", [])
+        for index, part in enumerate(parts):
+            tail = "," if index < len(parts) - 1 else ""
+            lines.append(
+                f'            {{"path": {json.dumps(part["path"])}, '
+                f'"qty": {int(part["qty"])}}}{tail}'
+            )
+
+        lines.append("        ]")
+        lines.append("    }" + ("," if position < len(entries) - 1 else ""))
+    lines.append("]")
+
+    return "\n".join(lines) + "\n"
+
+
+def write_requests(entries):
+    write_atomically(REQUESTS_PATH, dump_requests(entries))
 
 
 @app.post("/api/login")
@@ -240,6 +305,82 @@ def update_qty():
     write_inventory(data)
 
     return jsonify({"changes": saved})
+
+
+@app.get("/api/requests")
+def list_requests():
+    """Every open request, oldest first."""
+    return jsonify(read_requests())
+
+
+@app.post("/api/requests")
+def create_request():
+    """Add a request from someone's cart."""
+    payload = request.get_json(silent=True) or {}
+
+    name = payload.get("name")
+    note = payload.get("note", "")
+    parts = payload.get("parts")
+
+    if not isinstance(name, str) or not name.strip():
+        return jsonify({"error": "a request needs the name of whoever is asking"}), 400
+    if not isinstance(note, str):
+        return jsonify({"error": "note must be text"}), 400
+    if not isinstance(parts, list) or not parts:
+        return jsonify({"error": "a request needs at least one part"}), 400
+
+    cleaned = []
+    for part in parts:
+        path = part.get("path") if isinstance(part, dict) else None
+        if not isinstance(path, list) or len(path) != 4:
+            return jsonify({
+                "error": "each part needs a path of rack, section, bin and item"
+            }), 400
+        if not all(isinstance(step, str) and step for step in path):
+            return jsonify({"error": "a part path may not have empty steps"}), 400
+
+        try:
+            quantity = int(part["qty"])
+        except (KeyError, TypeError, ValueError):
+            return jsonify({"error": "each part needs an integer qty"}), 400
+        if quantity < 1:
+            return jsonify({"error": "a part quantity must be at least 1"}), 400
+
+        cleaned.append({"path": path, "qty": quantity})
+
+    entry = {
+        # An id rather than a list position, so two people resolving at once
+        # can't take each other's request off the queue.
+        "id": uuid.uuid4().hex[:8],
+        "name": name.strip(),
+        "at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "note": note.strip(),
+        "parts": cleaned,
+    }
+
+    entries = read_requests()
+    entries.append(entry)
+    write_requests(entries)
+
+    return jsonify(entry), 201
+
+
+@app.post("/api/requests/<request_id>/resolve")
+def resolve_request(request_id):
+    """Take a request off the queue.
+
+    Deliberately does not touch inv.json — marking a request done and moving
+    the stock that went with it are separate steps, and only the first is
+    wanted so far.
+    """
+    entries = read_requests()
+    remaining = [entry for entry in entries if entry.get("id") != request_id]
+
+    if len(remaining) == len(entries):
+        return jsonify({"error": f"no open request with id {request_id}"}), 404
+
+    write_requests(remaining)
+    return jsonify({"resolved": request_id, "open": len(remaining)})
 
 
 if __name__ == "__main__":

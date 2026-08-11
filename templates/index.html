@@ -237,10 +237,12 @@
         </main>
 
         {% include "partials/cart.html" %}
+        {% include "partials/requests.html" %}
 
         <script>
             // Resolved by Flask so the front end never hardcodes a path.
             window.LOGIN_URL = "{{ url_for('login') }}";
+            window.REQUESTS_URL = "{{ url_for('list_requests') }}";
             window.INVENTORY_URL = "{{ url_for('inventory') }}";
             window.RACK_ROUTES = {
                 std: "{{ url_for('std_rack') }}",
@@ -251,6 +253,7 @@
         <script src="{{ url_for('static', filename='scripts/racks-data.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/search.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/request.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/review.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/editor.js') }}"></script>
         <script src="{{ url_for('static', filename='scripts/main.js') }}"></script>
     </body>
