@@ -94,9 +94,27 @@ function parseBays(entry) {
         }));
 }
 
+// The last document we loaded, kept as it came off disk. The parsed RACKS
+// tree is what the pages draw from, but anything that already speaks in raw
+// inv.json keys — a stored request path, say — wants the document itself.
+let rawInventory = {};
+
+// How many of a raw ["1 parts", bay, class, item] path are on the shelf, or
+// null when the path no longer points at anything.
+function stockAt(path) {
+    if (!Array.isArray(path) || path.length !== 4) {
+        return null;
+    }
+    const [rack, bay, itemClass, item] = path;
+    const found = rawInventory?.[rack]?.[bay]?.[itemClass]?.[item];
+    return found && typeof found.qty === "number" ? found.qty : null;
+}
+
 // Fold inv.json into RACKS. Racks it doesn't mention keep their label and
 // stay unopenable.
 function applyInventory(raw) {
+    rawInventory = raw || {};
+
     // Clear first, so a rack removed from inv.json stops being openable
     // without needing a page reload.
     Object.values(RACKS).forEach((rack) => {

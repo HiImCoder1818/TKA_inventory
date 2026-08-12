@@ -9,16 +9,27 @@
 // Both are the same drawer as the cart, since they are the two sides of the
 // same exchange.
 //
-// Resolving does not move stock. The counts on the shelves are still whatever
-// someone last saved.
+// Quantities on an open request can be trimmed before it is filled; those
+// edits are staged and written by Save, the same way stock edits are.
+//
+// Resolving removes the parts from stock. The history keeps what was asked
+// for and, separately, what actually came off the shelf.
 
 let reviewPanel = null;
 let reviewList = null;
+let reviewSave = null;
 let historyPanel = null;
 let historyList = null;
 
 let openRequests = [];
 let historyEntries = [];
+
+// Staged quantity edits, keyed by request id + part path.
+const staged = new Map();
+
+function partKey(id, path) {
+    return [id, ...path].join(" ");
+}
 
 // -------------------------------- helpers --------------------------------
 
@@ -48,7 +59,7 @@ function whenText(iso) {
 
 // A stored path is the raw inv.json keys; show them the way the rest of the
 // app does rather than as they happen to be spelled in the file.
-function pathTrail(path) {
+function partTrail(path) {
     const [rackKey, ...rest] = path;
     const parsed = parseRackKey(rackKey);
     const rackLabel = parsed ? `${parsed.number} ${displayName(parsed.name)}` : rackKey;
@@ -72,10 +83,99 @@ function pathTrail(path) {
     return trail;
 }
 
+// One part of a request. `editable` adds the steppers, which only the open
+// queue wants — the history is a record and doesn't change.
+function partRow(entry, part, editable) {
+    const li = document.createElement("li");
+    li.className = "req-part";
+
+    const key = partKey(entry.id, part.path);
+    const current = () => (staged.has(key) ? staged.get(key) : part.qty);
+
+    const qty = document.createElement("span");
+    qty.className = "req-part__qty";
+
+    const sync = () => {
+        const now = current();
+        const stock = editable ? stockAt(part.path) : null;
+
+        qty.textContent = `×${now}`;
+        qty.classList.toggle("is-dirty", now !== part.qty);
+        qty.title = now === part.qty ? "" : `Unsaved — was ×${part.qty}`;
+
+        if (editable) {
+            li.querySelector(".qty-btn--minus").disabled = now <= 1;
+            li.querySelector(".qty-btn--plus").disabled = stock != null && now >= stock;
+            // Say so when the queue is asking for more than the shelf holds.
+            li.classList.toggle("req-part--short", stock != null && now > stock);
+            li.dataset.stock = stock == null ? "" : `${stock} on hand`;
+        }
+    };
+
+    // The count and its steppers travel as one block, so a long trail wraps
+    // them together rather than stranding the buttons on their own line.
+    const end = document.createElement("span");
+    end.className = "req-part__end";
+    end.append(qty);
+
+    li.append(partTrail(part.path || []), end);
+
+    if (editable) {
+        const controls = document.createElement("span");
+        controls.className = "req-part__controls";
+
+        [-1, 1].forEach((delta) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = `qty-btn qty-btn--${delta > 0 ? "plus" : "minus"}`;
+            button.textContent = delta > 0 ? "+" : "−";
+            button.setAttribute("aria-label",
+                `${delta > 0 ? "Add" : "Remove"} one ${part.path[3]}`);
+            button.addEventListener("click", () => {
+                // Never past the shelf: a request you can't fill isn't worth
+                // staging. The server checks the same bound on save.
+                const stock = stockAt(part.path);
+                const ceiling = stock == null ? Infinity : Math.max(stock, 1);
+                const next = Math.min(Math.max(1, current() + delta), ceiling);
+
+                if (next === part.qty) {
+                    staged.delete(key);
+                } else {
+                    staged.set(key, next);
+                }
+                sync();
+                syncRequestSave();
+            });
+            controls.append(button);
+        });
+
+        end.append(controls);
+    }
+
+    // A resolved request records what came off the shelf as well as what was
+    // asked for. They usually match; when they don't, the difference is the
+    // interesting part of the record.
+    const taken = (entry.fulfilled || [])
+        .find((item) => String(item.path) === String(part.path));
+
+    if (taken && taken.qty !== part.qty) {
+        const note = document.createElement("span");
+        note.className = "req-part__taken";
+        note.textContent = `${taken.qty} filled`;
+        end.prepend(note);
+    }
+
+    sync();
+    return li;
+}
+
 // Shared card: who asked, what for, and their note.
-function requestCard(entry) {
+function requestCard(entry, editable) {
     const card = document.createElement("article");
     card.className = "req-card";
+    if (entry.id) {
+        card.dataset.requestId = entry.id;
+    }
 
     const head = document.createElement("header");
     head.className = "req-card__head";
@@ -95,15 +195,7 @@ function requestCard(entry) {
     parts.className = "req-card__parts";
 
     (entry.parts || []).forEach((part) => {
-        const li = document.createElement("li");
-        li.className = "req-part";
-
-        const qty = document.createElement("span");
-        qty.className = "req-part__qty";
-        qty.textContent = `×${part.qty}`;
-
-        li.append(pathTrail(part.path || []), qty);
-        parts.append(li);
+        parts.append(partRow(entry, part, editable));
     });
 
     card.append(parts);
@@ -136,7 +228,7 @@ function renderRequests() {
     reviewPanel.querySelector("[data-requests-empty]").hidden = openRequests.length > 0;
 
     openRequests.forEach((entry) => {
-        const card = requestCard(entry);
+        const card = requestCard(entry, true);
 
         const resolve = document.createElement("button");
         resolve.type = "button";
@@ -147,11 +239,23 @@ function renderRequests() {
 
         reviewList.append(card);
     });
+
+    syncRequestSave();
 }
 
+// The queue is read against stock, so both have to be current before it can
+// be drawn. A failed stock read isn't fatal — the caps just go away and the
+// server has the last word.
 function refreshRequests() {
-    return getJson(window.REQUESTS_URL)
-        .then((entries) => {
+    staged.clear();
+
+    return Promise.all([
+        getJson(window.REQUESTS_URL),
+        loadInventory().catch((error) => {
+            console.warn("stock unavailable:", error.message);
+        }),
+    ])
+        .then(([entries]) => {
             openRequests = entries;
             drawerError(reviewPanel, "");
             renderRequests();
@@ -159,6 +263,88 @@ function refreshRequests() {
         .catch((error) => {
             console.error("requests:", error.message);
             drawerError(reviewPanel, error.message);
+        });
+}
+
+// ------------------------------ staged edits ------------------------------
+
+function isDirty(entry) {
+    return (entry.parts || []).some((part) => staged.has(partKey(entry.id, part.path)));
+}
+
+function syncRequestSave() {
+    if (!reviewSave) {
+        return;
+    }
+    const count = staged.size;
+    reviewSave.disabled = count === 0;
+    reviewSave.classList.toggle("save-btn--dirty", count > 0);
+    reviewSave.textContent = count === 0
+        ? "No changes to save"
+        : `Save ${count} change${count === 1 ? "" : "s"}`;
+
+    // Resolving fills the saved numbers, so a card with unsaved edits can't
+    // be resolved until they are written or dropped.
+    openRequests.forEach((entry) => {
+        const card = reviewList && reviewList.querySelector(`[data-request-id="${entry.id}"]`);
+        const resolve = card && card.querySelector(".req-card__resolve");
+        if (!resolve) {
+            return;
+        }
+        const dirty = isDirty(entry);
+        resolve.disabled = dirty;
+        resolve.title = dirty ? "Save the quantity changes first" : "";
+    });
+}
+
+function saveRequestQtys() {
+    if (!staged.size) {
+        return;
+    }
+
+    // Rebuild each change from the queue rather than from the key, so the
+    // path we send is the one the server stored.
+    const changes = [];
+    openRequests.forEach((entry) => {
+        (entry.parts || []).forEach((part) => {
+            const key = partKey(entry.id, part.path);
+            if (staged.has(key)) {
+                changes.push({ id: entry.id, path: part.path, qty: staged.get(key) });
+            }
+        });
+    });
+
+    if (!changes.length) {
+        staged.clear();
+        syncRequestSave();
+        return;
+    }
+
+    const label = reviewSave.textContent;
+    reviewSave.disabled = true;
+    reviewSave.textContent = "Saving…";
+
+    fetch(window.REQUESTS_QTY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changes }),
+    })
+        .then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) {
+                throw new Error(body.error || `save failed (${response.status})`);
+            }
+            return body;
+        })
+        // Re-read rather than patching in place: the reply is the file, and
+        // someone else may have resolved something while this was open.
+        .then(refreshRequests)
+        .then(syncRequestSave)
+        .catch((error) => {
+            console.error("requests:", error.message);
+            drawerError(reviewPanel, error.message);
+            reviewSave.disabled = false;
+            reviewSave.textContent = label;
         });
 }
 
@@ -175,7 +361,23 @@ function resolveRequest(id, button) {
             }
             return body;
         })
-        .then(refreshRequests)
+        .then(async (body) => {
+            // Stock just moved, so whatever is on screen behind the drawer
+            // is now out of date.
+            document.dispatchEvent(new CustomEvent("inventorychange"));
+            await refreshRequests();
+
+            // The shelf can come up short between asking and filling; say
+            // what actually came off it rather than pretending it matched.
+            // After the refresh, or it clears the message it just set.
+            const short = (body && body.short) || [];
+            if (short.length) {
+                const named = short
+                    .map((item) => `${displayName(item.item)} (${item.taken} of ${item.wanted})`)
+                    .join(", ");
+                drawerError(reviewPanel, `Filled short on ${named} — that's all there was.`);
+            }
+        })
         .catch((error) => {
             console.error("requests:", error.message);
             drawerError(reviewPanel, error.message);
@@ -201,7 +403,7 @@ function renderHistory() {
     // Newest first — the log is appended to, but the recent end is the
     // interesting one.
     [...historyEntries].reverse().forEach((entry) => {
-        const card = requestCard(entry);
+        const card = requestCard(entry, false);
 
         const state = document.createElement("span");
         if (entry.resolvedAt) {
@@ -235,6 +437,7 @@ function refreshHistory() {
 function initReview() {
     reviewPanel = document.querySelector(".review");
     reviewList = reviewPanel ? reviewPanel.querySelector(".review__list") : null;
+    reviewSave = reviewPanel ? reviewPanel.querySelector("[data-save-requests]") : null;
     historyPanel = document.querySelector(".history");
     historyList = historyPanel ? historyPanel.querySelector(".history__list") : null;
 
@@ -255,6 +458,9 @@ function initReview() {
     document.querySelectorAll("[data-close-requests]").forEach((el) => {
         el.addEventListener("click", () => { reviewPanel.hidden = true; });
     });
+    if (reviewSave) {
+        reviewSave.addEventListener("click", saveRequestQtys);
+    }
     document.querySelectorAll("[data-open-history]").forEach((el) => {
         el.addEventListener("click", () => show(historyPanel, refreshHistory));
     });
@@ -264,13 +470,14 @@ function initReview() {
 
     // Only the reviewing side needs the badge, and only once signed in.
     const maybeRefresh = () => {
-        if (!currentAccount()) {
+        if (!currentAccount() || document.body.dataset.mode !== "edit") {
+            // The queue belongs to the filling side; don't leave it open
+            // behind a switch back to requesting, staged edits and all.
+            staged.clear();
             closeDrawers();
             return;
         }
-        if (document.body.dataset.mode === "edit") {
-            refreshRequests();
-        }
+        refreshRequests();
     };
 
     document.addEventListener("accountchange", maybeRefresh);

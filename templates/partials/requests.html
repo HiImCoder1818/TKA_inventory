@@ -1,7 +1,8 @@
 {#
     The queue of open part requests, for whoever is in edit mode. Same drawer
     as the cart — the two sides of the same exchange, so they read the same.
-    Filled in by review.js; resolving one leaves the inventory alone.
+    Filled in by review.js. Quantities can be trimmed here before filling;
+    resolving writes the parts off the shelf.
 #}
 <aside class="drawer review" aria-label="Part requests" hidden>
     <header class="drawer__head">
@@ -16,4 +17,12 @@
         <p class="drawer__empty" data-requests-empty>No open requests.</p>
         <div class="review__list"></div>
     </div>
+
+    <footer class="drawer__foot">
+        <p class="drawer__note">
+            Resolving takes the request off the queue and removes the parts from stock.
+            There is no undo.
+        </p>
+        <button type="button" class="save-btn drawer__save" data-save-requests disabled>No changes to save</button>
+    </footer>
 </aside>

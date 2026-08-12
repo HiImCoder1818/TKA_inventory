@@ -152,6 +152,8 @@ function makeItem(bay, slot, item, position) {
         saved: item.qty,
         qty: item.qty,
         minus: null,
+        want: null,
+        add: null,
     };
 
     const minus = makeStepper(entry, -1, "Remove");
@@ -159,12 +161,20 @@ function makeItem(bay, slot, item, position) {
     entry.minus = minus;
     controls.append(minus, plus);
 
+    // You can't ask for what isn't there, so the box caps at the shelf count
+    // and empty shelves have nothing to add.
     const want = document.createElement("input");
     want.type = "number";
     want.className = "tree__want";
     want.min = "1";
     want.value = "1";
     want.setAttribute("aria-label", `How many ${item.name} to request`);
+    want.addEventListener("input", () => {
+        const capped = Math.min(Math.max(1, Number(want.value) || 1), Math.max(entry.qty, 1));
+        if (want.value !== "" && Number(want.value) !== capped) {
+            want.value = String(capped);
+        }
+    });
 
     const addToCart = document.createElement("button");
     addToCart.type = "button";
@@ -173,6 +183,9 @@ function makeItem(bay, slot, item, position) {
     addToCart.setAttribute("aria-label", `Add ${item.name} to the request`);
     addToCart.addEventListener("click", (event) => {
         event.stopPropagation();
+        if (entry.qty <= 0) {
+            return;
+        }
         cartAdd({
             rack: number,
             rackLabel: rack.items,
@@ -182,12 +195,14 @@ function makeItem(bay, slot, item, position) {
             binName: slot.name,
             item: item.key,
             itemName: item.name,
-            qty: Math.max(1, Number(want.value) || 1),
+            qty: Math.min(Math.max(1, Number(want.value) || 1), entry.qty),
             available: entry.qty,
         });
         want.value = "1";
     });
 
+    entry.want = want;
+    entry.add = addToCart;
     request.append(want, addToCart);
 
     li.append(name, qty, controls, request);
@@ -272,6 +287,18 @@ function syncEntry(entry) {
     entry.qtyEl.title = dirty ? `Unsaved — was ×${entry.saved}` : "";
     entry.el.classList.toggle("is-dirty", dirty);
     entry.minus.disabled = entry.qty <= 0;
+
+    // Requests are bounded by the shelf, and the shelf moves.
+    if (entry.want) {
+        entry.want.max = String(Math.max(entry.qty, 1));
+        if (Number(entry.want.value) > entry.qty) {
+            entry.want.value = String(Math.max(entry.qty, 1));
+        }
+    }
+    if (entry.add) {
+        entry.add.disabled = entry.qty <= 0;
+        entry.add.title = entry.qty <= 0 ? "None on hand" : "";
+    }
 }
 
 function pendingChanges() {
@@ -577,6 +604,36 @@ function focusFromQuery() {
         target.scrollIntoView({ block: "nearest" });
     }
 }
+
+// Filling a request takes parts off these very shelves. Re-read the counts
+// rather than redrawing the page: a redraw would throw away whatever is
+// expanded and any edits staged but not yet saved.
+document.addEventListener("inventorychange", () => {
+    loadInventory()
+        .then(() => {
+            entries.forEach((entry) => {
+                const stored = stockAt([
+                    entry.path.rack, entry.path.bay, entry.path.itemClass, entry.path.item,
+                ]);
+                if (stored == null) {
+                    return;
+                }
+                // Read dirtiness before moving the baseline under it: an
+                // edit in progress is someone's count of the shelf, and it
+                // stays staged rather than being overwritten.
+                const wasStaged = entry.qty !== entry.saved;
+
+                entry.item.qty = stored;
+                entry.saved = stored;
+                if (!wasStaged) {
+                    entry.qty = stored;
+                }
+                syncEntry(entry);
+            });
+            syncSaveButton();
+        })
+        .catch((error) => console.error("inventory:", error.message));
+});
 
 loadInventory()
     .then(() => {

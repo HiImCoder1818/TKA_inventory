@@ -96,6 +96,14 @@ initEditor({
     onSaved: () => loadInventory().then(applyToPlan),
 });
 
+// Filling a request empties shelves, so the plan re-reads rather than
+// carrying counts from before the handover.
+document.addEventListener("inventorychange", () => {
+    loadInventory().then(applyToPlan).catch((error) => {
+        console.error("inventory:", error.message);
+    });
+});
+
 loadInventory()
     .then(() => {
         applyToPlan();

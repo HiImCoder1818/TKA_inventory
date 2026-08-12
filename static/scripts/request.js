@@ -126,16 +126,23 @@ function applyAccount() {
 
 // --------------------------------- cart ---------------------------------
 
+// You can't request more than is on the shelf. The server checks this too —
+// this is so the number in front of you is the honest one.
+function capQty(qty, available) {
+    const wanted = Math.max(1, qty);
+    return available == null ? wanted : Math.max(0, Math.min(wanted, available));
+}
+
 // Adding the same item twice tops up the line rather than repeating it.
 function cartAdd(line) {
     const key = lineKey(line);
     const existing = cart.find((other) => lineKey(other) === key);
 
     if (existing) {
-        existing.qty += line.qty;
         existing.available = line.available;
+        existing.qty = capQty(existing.qty + line.qty, existing.available);
     } else {
-        cart.push({ ...line });
+        cart.push({ ...line, qty: capQty(line.qty, line.available) });
     }
 
     saveCart();
@@ -152,8 +159,9 @@ function cartSetQty(key, qty) {
     if (!line) {
         return;
     }
-    line.qty = Math.max(1, qty);
-    saveCart();
+    line.qty = capQty(qty, line.available);
+    writeStore(CART_KEY, cart);
+    syncCartTotals();
 }
 
 function cartTotal() {
@@ -215,9 +223,23 @@ function cartLine(line) {
     qty.type = "number";
     qty.className = "cart-line__qty";
     qty.min = "1";
+    if (line.available != null) {
+        qty.max = String(line.available);
+    }
     qty.value = String(line.qty);
     qty.setAttribute("aria-label", `Quantity of ${line.itemName}`);
-    qty.addEventListener("input", () => cartSetQty(key, Number(qty.value) || 1));
+    // Typing here must not rebuild the list underneath the caret, so this
+    // updates the line in place and only re-totals the header.
+    qty.addEventListener("input", () => {
+        if (qty.value === "") {
+            return;
+        }
+        const capped = capQty(Number(qty.value) || 1, line.available);
+        if (Number(qty.value) !== capped) {
+            qty.value = String(capped);
+        }
+        cartSetQty(key, capped);
+    });
 
     const remove = document.createElement("button");
     remove.type = "button";
@@ -244,13 +266,22 @@ function cartLine(line) {
     return li;
 }
 
-function renderCart() {
+// The parts of the cart that live outside the list, so a quantity change can
+// re-total without redrawing the rows.
+function syncCartTotals() {
     document.querySelectorAll("[data-cart-count]").forEach((el) => {
         el.textContent = String(cartTotal());
     });
     document.querySelectorAll("[data-open-cart]").forEach((el) => {
         el.classList.toggle("cart-btn--filled", cart.length > 0);
     });
+    document.querySelectorAll("[data-send-request]").forEach((el) => {
+        el.disabled = cart.length === 0;
+    });
+}
+
+function renderCart() {
+    syncCartTotals();
 
     if (!cartLines) {
         return;
@@ -261,10 +292,6 @@ function renderCart() {
 
     cartEmpty.hidden = cart.length > 0;
     cartLines.hidden = cart.length === 0;
-
-    document.querySelectorAll("[data-send-request]").forEach((el) => {
-        el.disabled = cart.length === 0;
-    });
 }
 
 // -------------------------------- sending --------------------------------

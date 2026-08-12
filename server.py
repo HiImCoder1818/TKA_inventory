@@ -93,17 +93,25 @@ def dump_requests(entries):
             lines.append(f'        "{field}": {json.dumps(entry.get(field, ""))},')
         if "resolvedAt" in entry:
             lines.append(f'        "resolvedAt": {json.dumps(entry["resolvedAt"])},')
-        lines.append('        "parts": [')
+        # "fulfilled" is what actually came off the shelf, which can differ
+        # from what was asked for once a request has been trimmed.
+        blocks = ["parts"]
+        if "fulfilled" in entry:
+            blocks.append("fulfilled")
 
-        parts = entry.get("parts", [])
-        for index, part in enumerate(parts):
-            tail = "," if index < len(parts) - 1 else ""
-            lines.append(
-                f'            {{"path": {json.dumps(part["path"])}, '
-                f'"qty": {int(part["qty"])}}}{tail}'
-            )
+        for block_index, field in enumerate(blocks):
+            lines.append(f'        "{field}": [')
 
-        lines.append("        ]")
+            parts = entry.get(field) or []
+            for index, part in enumerate(parts):
+                tail = "," if index < len(parts) - 1 else ""
+                lines.append(
+                    f'            {{"path": {json.dumps(part["path"])}, '
+                    f'"qty": {int(part["qty"])}}}{tail}'
+                )
+
+            lines.append("        ]" + ("," if block_index < len(blocks) - 1 else ""))
+
         lines.append("    }" + ("," if position < len(entries) - 1 else ""))
     lines.append("]")
 
@@ -138,13 +146,43 @@ def log_request(entry):
     write_history(history)
 
 
-def log_resolved(request_id, when):
-    """Stamp the history entry for a request that has just been resolved."""
+def log_trimmed(request_id, parts):
+    """Carry a quantity edit through to the history's open copy.
+
+    The history is meant to read as the request did. Without this it would
+    keep the number first asked for and then report a smaller `fulfilled`,
+    which reads as the shelf coming up short rather than as someone deciding
+    to hand over fewer.
+    """
+    history = read_history()
+    for entry in history:
+        if entry.get("id") == request_id and not entry.get("resolvedAt"):
+            entry["parts"] = [dict(part) for part in parts]
+    write_history(history)
+
+
+def log_resolved(request_id, when, fulfilled):
+    """Stamp the history entry for a request that has just been resolved.
+
+    The entry's own `parts` stay as the request stood when it was filled;
+    `fulfilled` records what actually came off the shelf, which is smaller
+    only when the stock could not cover it.
+    """
     history = read_history()
     for entry in history:
         if entry.get("id") == request_id and not entry.get("resolvedAt"):
             entry["resolvedAt"] = when
+            entry["fulfilled"] = fulfilled
     write_history(history)
+
+
+def stock_of(inventory, path):
+    """How many of `path` are on the shelf, or None if it isn't there."""
+    try:
+        rack, bay, item_class, item = path
+        return int(inventory[rack][bay][item_class][item]["qty"])
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 @app.post("/api/login")
@@ -368,6 +406,15 @@ def create_request():
     if not isinstance(parts, list) or not parts:
         return jsonify({"error": "a request needs at least one part"}), 400
 
+    # The stock cap is a rule, not a nicety, so an unreadable inventory stops
+    # the request rather than quietly letting it through unchecked.
+    try:
+        inventory = read_inventory()
+    except FileNotFoundError:
+        return jsonify({"error": f"{INVENTORY_PATH.name} not found"}), 500
+    except json.JSONDecodeError as exc:
+        return jsonify({"error": f"{INVENTORY_PATH.name} is not valid JSON: {exc}"}), 500
+
     cleaned = []
     for part in parts:
         path = part.get("path") if isinstance(part, dict) else None
@@ -384,6 +431,16 @@ def create_request():
             return jsonify({"error": "each part needs an integer qty"}), 400
         if quantity < 1:
             return jsonify({"error": "a part quantity must be at least 1"}), 400
+
+        # You can't ask for more than is on the shelf. The browser caps this
+        # too, but the rule belongs here as well.
+        available = stock_of(inventory, path)
+        if available is None:
+            return jsonify({"error": f"no such item: {' / '.join(path)}"}), 400
+        if quantity > available:
+            return jsonify({
+                "error": f"only {available} of {path[3]} on hand, {quantity} requested"
+            }), 409
 
         cleaned.append({"path": path, "qty": quantity})
 
@@ -407,23 +464,134 @@ def create_request():
 
 @app.post("/api/requests/<request_id>/resolve")
 def resolve_request(request_id):
-    """Take a request off the queue and stamp it in the history.
+    """Fill a request: take it off the queue, move the stock, log it.
 
-    Deliberately does not touch inv.json — marking a request done and moving
-    the stock that went with it are separate steps, and only the first is
-    wanted so far.
+    Filling is what actually empties the shelf, so this is the one place a
+    request writes to inv.json. A count is never driven negative — if the
+    shelf has less than was asked for, it takes what is there and reports
+    the shortfall, and the history records what came off rather than what
+    was wanted.
+
+    There is no undo. Resolving is the record of a physical handover.
     """
     entries = read_requests()
-    remaining = [entry for entry in entries if entry.get("id") != request_id]
+    target = next((entry for entry in entries if entry.get("id") == request_id), None)
 
-    if len(remaining) == len(entries):
+    if target is None:
         return jsonify({"error": f"no open request with id {request_id}"}), 404
 
-    when = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    write_requests(remaining)
-    log_resolved(request_id, when)
+    try:
+        inventory = read_inventory()
+    except FileNotFoundError:
+        return jsonify({"error": f"{INVENTORY_PATH.name} not found"}), 500
+    except json.JSONDecodeError as exc:
+        return jsonify({"error": f"{INVENTORY_PATH.name} is not valid JSON: {exc}"}), 500
 
-    return jsonify({"resolved": request_id, "resolvedAt": when, "open": len(remaining)})
+    fulfilled = []
+    short = []
+
+    for part in target.get("parts", []):
+        path = part["path"]
+        wanted = int(part["qty"])
+        available = stock_of(inventory, path)
+
+        if available is None:
+            # The item has been renamed or removed since the request was made.
+            short.append({"item": path[3], "wanted": wanted, "taken": 0})
+            continue
+
+        # Never drive a count negative: take what is there and say so.
+        taken = min(available, wanted)
+        rack, bay, item_class, item = path
+        inventory[rack][bay][item_class][item]["qty"] = available - taken
+        fulfilled.append({"path": path, "qty": taken})
+
+        if taken < wanted:
+            short.append({"item": path[3], "wanted": wanted, "taken": taken})
+
+    when = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+    write_inventory(inventory)
+    write_requests([entry for entry in entries if entry.get("id") != request_id])
+    log_resolved(request_id, when, fulfilled)
+
+    return jsonify({
+        "resolved": request_id,
+        "resolvedAt": when,
+        "open": len(entries) - 1,
+        "fulfilled": fulfilled,
+        "short": short,
+    })
+
+
+@app.post("/api/requests/qty")
+def update_request_qty():
+    """Set quantities on open requests.
+
+    Absolute totals, not deltas: whoever is filling the request is deciding
+    the final number, rather than adding to a count someone else is also
+    moving. Capped at what's on the shelf.
+    """
+    payload = request.get_json(silent=True) or {}
+    changes = payload.get("changes")
+
+    if not isinstance(changes, list) or not changes:
+        return jsonify({"error": "expected a non-empty list of changes"}), 400
+
+    entries = read_requests()
+    by_id = {entry.get("id"): entry for entry in entries}
+
+    try:
+        inventory = read_inventory()
+    except FileNotFoundError:
+        return jsonify({"error": f"{INVENTORY_PATH.name} not found"}), 500
+    except json.JSONDecodeError as exc:
+        return jsonify({"error": f"{INVENTORY_PATH.name} is not valid JSON: {exc}"}), 500
+
+    # Check the whole batch before writing any of it.
+    staged = []
+    for change in changes:
+        if not isinstance(change, dict):
+            return jsonify({"error": "each change must be an object"}), 400
+
+        entry = by_id.get(change.get("id"))
+        path = change.get("path")
+        if entry is None:
+            return jsonify({"error": f"no open request with id {change.get('id')}"}), 404
+        if not isinstance(path, list) or len(path) != 4:
+            return jsonify({"error": "each change needs the part's path"}), 400
+
+        try:
+            quantity = int(change["qty"])
+        except (KeyError, TypeError, ValueError):
+            return jsonify({"error": "each change needs an integer qty"}), 400
+        if quantity < 1:
+            return jsonify({"error": "a part quantity must be at least 1"}), 400
+
+        part = next((item for item in entry.get("parts", []) if item["path"] == path), None)
+        if part is None:
+            return jsonify({"error": f"{' / '.join(path)} is not on that request"}), 404
+
+        available = stock_of(inventory, path)
+        if available is not None and quantity > available:
+            return jsonify({
+                "error": f"only {available} of {path[3]} on hand, {quantity} asked for"
+            }), 409
+
+        staged.append((part, quantity))
+
+    for part, quantity in staged:
+        part["qty"] = quantity
+
+    write_requests(entries)
+
+    # Keep the history's open copy in step with the queue.
+    for entry_id in {change.get("id") for change in changes}:
+        entry = by_id.get(entry_id)
+        if entry is not None:
+            log_trimmed(entry_id, entry.get("parts", []))
+
+    return jsonify({"changes": len(staged)})
 
 
 @app.get("/api/history")

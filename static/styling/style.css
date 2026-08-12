@@ -1843,6 +1843,19 @@ body:not([data-role="admin"]) .modes {
     border-top: 1px solid var(--line);
 }
 
+/* Reuses the item index's save button, which carries its own top margin for
+   sitting under a list; the drawer's foot spaces its own rows. */
+.drawer__save {
+    margin-top: 0;
+}
+
+.drawer__note {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    line-height: 1.45;
+}
+
 .drawer__label {
     color: var(--text-dim);
     font-size: 0.7rem;
@@ -2085,6 +2098,7 @@ body:not([data-role="admin"]) .history-btn {
 
 .req-part {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 0.5rem;
     padding: 0.26rem 0.38rem;
@@ -2120,6 +2134,52 @@ body:not([data-role="admin"]) .history-btn {
     color: var(--accent);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+}
+
+/* Trimmed but not yet written — same amber the shelf counts use. */
+.req-part__qty.is-dirty {
+    color: #fbbf24;
+}
+
+.req-part__end {
+    flex: 0 0 auto;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.req-part__controls {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.22rem;
+}
+
+/* The queue can outlive the shelf: someone else may have taken the last of
+   it between the asking and the filling. */
+.req-part--short {
+    background: #2a1c14;
+    box-shadow: inset 2px 0 0 #fbbf24;
+}
+
+.req-part--short::after {
+    content: attr(data-stock);
+    flex: 0 0 100%;
+    color: #fbbf24;
+    font-size: 0.66rem;
+}
+
+/* What actually came off the shelf, on a resolved request. */
+.req-part__taken {
+    flex: 0 0 auto;
+    padding: 0.05rem 0.3rem;
+    border-radius: 0.6rem;
+    background: #23331f;
+    color: #86efac;
+    font-size: 0.64rem;
+    font-weight: 650;
+    white-space: nowrap;
 }
 
 .req-card__note {
