@@ -70,9 +70,13 @@ function refreshInventory() {
 // ------------------------------- notices -------------------------------
 
 // A message addressed to whoever is signed in on this page: their request
-// filled, or turned down. It arrives while they are looking at something
-// else, so it announces itself and then gets out of the way.
-const NOTICE_MS = 12000;
+// filled, or turned down.
+//
+// It stays until it is dismissed, and nothing else takes it away — not a
+// reload, not a new tab, not closing the browser. The server holds the
+// unread ones and hands them over when a page connects, so a message sent
+// while somebody was away is waiting when they come back. Dismissing is the
+// one thing that removes it, and it removes it everywhere.
 
 function noticeText(notice) {
     if (notice.kind === "declined") {
@@ -107,16 +111,12 @@ function noticeText(notice) {
     };
 }
 
-function showNotice(notice) {
-    const tray = document.querySelector(".notices");
-    if (!tray) {
-        return;
-    }
-
+function noticeCard(notice) {
     const { tone, title, body } = noticeText(notice);
 
     const card = document.createElement("article");
     card.className = `notice notice--${tone}`;
+    card.dataset.noticeId = notice.id || "";
 
     const heading = document.createElement("p");
     heading.className = "notice__title";
@@ -126,24 +126,82 @@ function showNotice(notice) {
     text.className = "notice__body";
     text.textContent = body;
 
+    const when = document.createElement("p");
+    when.className = "notice__when";
+    when.textContent = noticeWhen(notice.at);
+
     const close = document.createElement("button");
     close.type = "button";
     close.className = "notice__close";
     close.textContent = "×";
     close.setAttribute("aria-label", "Dismiss");
+    close.addEventListener("click", () => dismissNotice(notice.id, card));
 
-    const dismiss = () => {
-        card.classList.add("notice--going");
-        // Let it fade rather than vanish, but don't depend on the animation
-        // firing to actually remove it.
-        window.setTimeout(() => card.remove(), 200);
-    };
+    card.append(heading, text, when, close);
+    return card;
+}
 
-    close.addEventListener("click", dismiss);
-    card.append(heading, text, close);
-    tray.append(card);
+// One waiting since yesterday shouldn't read the same as one that just
+// landed, now that they keep.
+function noticeWhen(iso) {
+    if (!iso) {
+        return "";
+    }
+    const at = new Date(iso);
+    return Number.isNaN(at.getTime()) ? iso : at.toLocaleString();
+}
 
-    window.setTimeout(dismiss, NOTICE_MS);
+// Dismissing is a real write: the notice is gone for good, on every screen.
+// The card goes straight away — putting a message away shouldn't wait on the
+// network — and comes back if the server disagrees.
+function dismissNotice(id, card) {
+    card.classList.add("notice--going");
+    window.setTimeout(() => card.remove(), 200);
+
+    if (!id || !window.NOTICES_URL) {
+        return;
+    }
+
+    fetch(`${window.NOTICES_URL}/${encodeURIComponent(id)}/dismiss`,
+        { method: "POST", headers: liveHeaders() })
+        .then((response) => {
+            // A 404 means it was already dismissed elsewhere, which is the
+            // outcome we wanted anyway.
+            if (!response.ok && response.status !== 404) {
+                throw new Error(`dismiss failed (${response.status})`);
+            }
+        })
+        .catch((error) => {
+            console.error("notices:", error.message);
+            card.classList.remove("notice--going");
+            const tray = document.querySelector(".notices");
+            if (tray && !card.isConnected) {
+                tray.append(card);
+            }
+        });
+}
+
+// One new message. Ignore one we're already showing — a reconnection re-sends
+// everything still unread.
+function showNotice(notice) {
+    const tray = document.querySelector(".notices");
+    if (!tray || (notice.id && tray.querySelector(`[data-notice-id="${notice.id}"]`))) {
+        return;
+    }
+    tray.append(noticeCard(notice));
+}
+
+// The full set of what's unread, which is what a page gets on connecting.
+// Replacing rather than merging is what makes a dismissal on one screen show
+// up on another.
+function showNotices(notices) {
+    const tray = document.querySelector(".notices");
+    if (!tray) {
+        return;
+    }
+
+    tray.innerHTML = "";
+    notices.forEach((notice) => tray.append(noticeCard(notice)));
 }
 
 // -------------------------------- stream --------------------------------
@@ -163,6 +221,12 @@ function reconnectLive() {
         liveSource.close();
         liveSource = null;
     }
+
+    // Whose messages these are is about to change. Clear them now rather
+    // than leaving the last person's on screen if the reconnect is slow —
+    // they are on the server, so nothing is lost by dropping the cards.
+    showNotices([]);
+
     // A reopened stream is a fresh connection, not a recovery: the page
     // already has what it needs, so don't make it re-read everything.
     hasConnected = false;
@@ -181,6 +245,15 @@ function connectLive() {
             showNotice(JSON.parse(event.data));
         } catch (error) {
             console.warn("live: could not read a notice", error);
+        }
+    });
+
+    // Everything still unread, sent on connecting.
+    liveSource.addEventListener("notices", (event) => {
+        try {
+            showNotices(JSON.parse(event.data) || []);
+        } catch (error) {
+            console.warn("live: could not read the waiting notices", error);
         }
     });
 

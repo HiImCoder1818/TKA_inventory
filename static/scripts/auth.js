@@ -4,14 +4,14 @@
 // than on the data: /api/inventory and the rest stay open to anyone who calls
 // them directly. Signing in only decides what this page shows.
 //
-// Who is signed in lives in sessionStorage, which keeps you signed in while
-// you walk from the floor plan into a rack and back. A reload signs you out
-// again, which is what "no sessions" gets you — the two are told apart by the
-// Navigation Timing entry, so a link click carries through and F5 does not.
+// A sign-in ends two ways and no others: signing out, or four hours passing.
+// Reloading doesn't end it, nor does closing the tab — so it lives in
+// localStorage rather than sessionStorage, and survives the browser being
+// shut. The clock runs from the sign-in, not from the last page, so a machine
+// left open in the shop doesn't stay signed in indefinitely.
 //
-// A sign-in also lapses four hours after it was made, whether or not the tab
-// has been touched, so a machine left open in the shop doesn't stay signed in
-// indefinitely. The clock runs from the sign-in, not from the last page.
+// That means a shared computer stays signed in as whoever used it last, for
+// up to four hours. Sign out when you walk away from one.
 
 const AUTH_KEY = "tka.account";
 const SESSION_MS = 4 * 60 * 60 * 1000;
@@ -22,14 +22,23 @@ let loginPanel = null;
 let loginForm = null;
 let loginError = null;
 
-function wasReloaded() {
-    const [entry] = performance.getEntriesByType("navigation");
-    return Boolean(entry) && entry.type === "reload";
+// Sign-ins used to live in sessionStorage. Carry one over rather than
+// signing out somebody who was in the middle of something.
+function adoptOldSession() {
+    try {
+        const raw = window.sessionStorage.getItem(AUTH_KEY);
+        if (raw && !window.localStorage.getItem(AUTH_KEY)) {
+            window.localStorage.setItem(AUTH_KEY, raw);
+        }
+        window.sessionStorage.removeItem(AUTH_KEY);
+    } catch (error) {
+        // Nothing to carry over, or no storage to carry it into.
+    }
 }
 
 function readAccount() {
     try {
-        const raw = window.sessionStorage.getItem(AUTH_KEY);
+        const raw = window.localStorage.getItem(AUTH_KEY);
         const stored = raw ? JSON.parse(raw) : null;
 
         if (!stored || !stored.until || Date.now() >= stored.until) {
@@ -44,9 +53,9 @@ function readAccount() {
 function storeAccount(value) {
     try {
         if (value) {
-            window.sessionStorage.setItem(AUTH_KEY, JSON.stringify(value));
+            window.localStorage.setItem(AUTH_KEY, JSON.stringify(value));
         } else {
-            window.sessionStorage.removeItem(AUTH_KEY);
+            window.localStorage.removeItem(AUTH_KEY);
         }
     } catch (error) {
         console.warn("could not persist the signed-in account", error);
@@ -176,10 +185,7 @@ function initAuth() {
         return;
     }
 
-    // A reload starts over; following a link inside the app does not.
-    if (wasReloaded()) {
-        storeAccount(null);
-    }
+    adoptOldSession();
 
     loginForm.addEventListener("submit", submit);
     document.querySelectorAll("[data-logout]").forEach((el) => {

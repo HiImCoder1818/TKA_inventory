@@ -21,6 +21,7 @@ INVENTORY_PATH = Path(__file__).parent / "inv.json"
 ACCOUNTS_PATH = Path(__file__).parent / "accounts.json"
 REQUESTS_PATH = Path(__file__).parent / "requests.json"
 HISTORY_PATH = Path(__file__).parent / "history.json"
+NOTICES_PATH = Path(__file__).parent / "notices.json"
 
 # Items are single-key objects; keeping them on one line means a quantity
 # change stays a one-line diff in git.
@@ -45,6 +46,13 @@ _QTY_INLINE = re.compile(r'\{\s*"qty":\s*(-?\d+)\s*\}')
 
 _listeners = []
 _listeners_lock = threading.Lock()
+
+# Undismissed messages, read and rewritten as a whole file, so one lock round
+# the pair keeps two at once from losing each other.
+_notices_lock = threading.Lock()
+
+# Per person, so one ignored queue can't crowd out everybody else's.
+MAX_NOTICES_EACH = 30
 
 # How long a stream waits before sending a comment frame to prove it is still
 # there. Proxies and browsers drop a connection that goes quiet — and it is
@@ -83,26 +91,46 @@ def announce(*changed, origin=None):
 
 
 def notify(name, notice):
-    """Send one person word of something that happened to their request.
+    """Leave one person word of something that happened to their request.
 
     Addressed by the name they signed in under, which each page reports when
     it opens its stream. Nothing checks that claim — the same as everywhere
     else here, since there is no session — so this routes a message to the
     right screen rather than keeping it from the wrong one.
+
+    The message is written down before it is pushed. A notice stays put until
+    the person it is for dismisses it, so one sent while they were away is
+    waiting when they come back rather than lost to a screen nobody saw.
     """
     if not name:
         return
 
-    payload = json.dumps({
-        **notice,
+    entry = {
+        "id": uuid.uuid4().hex[:8],
         "for": name,
         "at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-    })
+        **notice,
+    }
+
+    with _notices_lock:
+        pending = read_notices()
+        pending.append(entry)
+        write_notices(pending)
+
+    payload = json.dumps(entry)
 
     with _listeners_lock:
         waiting = [item for item in _listeners if item["who"] == name]
 
     send_to(waiting, f"event: notice\ndata: {payload}\n\n")
+
+
+def notices_for(name):
+    """Everything still waiting to be read by `name`, oldest first."""
+    if not name:
+        return []
+    with _notices_lock:
+        return [entry for entry in read_notices() if entry.get("for") == name]
 
 
 def client_id():
@@ -134,6 +162,12 @@ def events():
             # pages stale for the browser's three-second default.
             yield "retry: 1000\n\n"
             yield "event: ready\ndata: {}\n\n"
+
+            # Everything still unread, as a set rather than one at a time.
+            # The page shows exactly this, so a notice dismissed on another
+            # screen stops showing here too.
+            waiting = json.dumps(notices_for(who))
+            yield f"event: notices\ndata: {waiting}\n\n"
 
             while True:
                 try:
@@ -270,6 +304,33 @@ def read_history():
 
 def write_history(entries):
     write_atomically(HISTORY_PATH, dump_requests(entries))
+
+
+# Notices are the app's own bookkeeping rather than something anyone edits by
+# hand, so they get plain json.dump instead of the laid-out writer the
+# request files use.
+def read_notices():
+    try:
+        with NOTICES_PATH.open(encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+    return [entry for entry in data if isinstance(entry, dict)] if isinstance(data, list) else []
+
+
+def write_notices(entries):
+    # Trim per person: somebody who never dismisses anything shouldn't grow
+    # the file without bound, and the oldest unread is the least useful.
+    kept = []
+    seen = {}
+    for entry in reversed(entries):
+        name = entry.get("for")
+        seen[name] = seen.get(name, 0) + 1
+        if seen[name] <= MAX_NOTICES_EACH:
+            kept.append(entry)
+
+    kept.reverse()
+    write_atomically(NOTICES_PATH, json.dumps(kept, indent=4, ensure_ascii=False) + "\n")
 
 
 def log_request(entry):
@@ -824,6 +885,31 @@ def list_history():
     tell who is asking, so that is a rule about the interface, not the data.
     """
     return jsonify(read_history())
+
+
+@app.get("/api/notices")
+def list_notices():
+    """Whatever `who` still has waiting.
+
+    The stream hands these over when a page connects, so this is the fallback
+    for a page whose stream hasn't come up yet.
+    """
+    return jsonify(notices_for(request.args.get("who")))
+
+
+@app.post("/api/notices/<notice_id>/dismiss")
+def dismiss_notice(notice_id):
+    """Put a notice away. The only thing that ever removes one."""
+    with _notices_lock:
+        pending = read_notices()
+        kept = [entry for entry in pending if entry.get("id") != notice_id]
+
+        if len(kept) == len(pending):
+            return jsonify({"error": f"no notice with id {notice_id}"}), 404
+
+        write_notices(kept)
+
+    return jsonify({"dismissed": notice_id, "waiting": len(kept)})
 
 
 if __name__ == "__main__":

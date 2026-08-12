@@ -2475,17 +2475,31 @@ body.is-locked {
 /* -------------------------- Notices ---------------------------- */
 
 /* Word from the filling side, arriving while you are looking at something
-   else. Bottom-right, above the drawers, out of the way of the top bar. */
+   else.
+
+   Bottom-left, because these stay until they are dismissed and the right of
+   the screen belongs to the drawers — a notice parked over the cart's send
+   button would sit there blocking it indefinitely.
+
+   The stack scrolls rather than climbing the page, newest at the bottom
+   nearest the eye. */
 .notices {
     position: fixed;
-    right: 1rem;
+    left: 1rem;
     bottom: 1rem;
     z-index: 60;
     display: flex;
-    flex-direction: column-reverse;
+    flex-direction: column;
     gap: 0.5rem;
     width: min(22rem, calc(100vw - 2rem));
+    max-height: min(28rem, calc(100vh - var(--topbar-h) - 3rem));
+    overflow-y: auto;
+    scrollbar-width: thin;
     pointer-events: none;
+}
+
+.notices:empty {
+    display: none;
 }
 
 .notice {
@@ -2540,6 +2554,14 @@ body.is-locked {
     color: var(--text-dim);
     font-size: 0.74rem;
     line-height: 1.45;
+}
+
+/* One waiting since yesterday shouldn't read like one that just landed. */
+.notice__when {
+    margin: 0.3rem 0 0;
+    color: var(--text-dim);
+    font-size: 0.65rem;
+    opacity: 0.75;
 }
 
 .notice__close {
