@@ -294,6 +294,38 @@ function renderCart() {
     cartLines.hidden = cart.length === 0;
 }
 
+// The raw inv.json path a cart line stands for.
+function linePath(line) {
+    const rack = RACKS[line.rack];
+    return rack && rack.key ? [rack.key, line.bay, line.bin, line.item] : null;
+}
+
+// A cart carries a snapshot of what was on the shelf when each line was
+// added, and a cart can sit open for a while. When someone else moves stock,
+// re-read the snapshots so the caps and the "only N on hand" warning are
+// about the shelf as it is now.
+//
+// The quantities themselves are left alone: what someone asked for is theirs
+// to change, and the send will say plainly if it can no longer be met.
+function refreshCartStock() {
+    let moved = false;
+
+    cart.forEach((line) => {
+        const path = linePath(line);
+        const available = path ? stockAt(path) : null;
+
+        if (available !== line.available) {
+            line.available = available;
+            moved = true;
+        }
+    });
+
+    if (moved) {
+        writeStore(CART_KEY, cart);
+        renderCart();
+    }
+}
+
 // -------------------------------- sending --------------------------------
 
 function sendRequest() {
@@ -316,14 +348,14 @@ function sendRequest() {
         name: account.name,
         note: cartNotes ? cartNotes.value.trim() : "",
         parts: cart.map((line) => ({
-            path: [line.rack ? RACKS[line.rack].key : "", line.bay, line.bin, line.item],
+            path: linePath(line) || ["", line.bay, line.bin, line.item],
             qty: line.qty,
         })),
     };
 
     fetch(window.REQUESTS_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: liveHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(payload),
     })
         .then(async (response) => {
@@ -408,6 +440,9 @@ function initRequest() {
     });
 
     document.addEventListener("accountchange", applyAccount);
+    // Whenever the shelf moves — our own save, or someone else's arriving
+    // over the live connection — the cart's idea of what's there is stale.
+    document.addEventListener("inventorychange", refreshCartStock);
 
     applyAccount();
     renderCart();

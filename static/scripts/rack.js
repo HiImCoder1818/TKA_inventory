@@ -355,6 +355,11 @@ function save() {
             });
             syncSaveButton();
             say(`Saved ${results.length} change${results.length === 1 ? "" : "s"}.`, false);
+
+            // Our own write doesn't come back over the live connection, so
+            // re-read for everything else on the page that reads stock —
+            // the request caps and the cart.
+            refreshInventory();
         })
         .catch((error) => {
             // The staged edits survive, so the count can be retried.
@@ -605,35 +610,34 @@ function focusFromQuery() {
     }
 }
 
-// Filling a request takes parts off these very shelves. Re-read the counts
-// rather than redrawing the page: a redraw would throw away whatever is
-// expanded and any edits staged but not yet saved.
-document.addEventListener("inventorychange", () => {
-    loadInventory()
-        .then(() => {
-            entries.forEach((entry) => {
-                const stored = stockAt([
-                    entry.path.rack, entry.path.bay, entry.path.itemClass, entry.path.item,
-                ]);
-                if (stored == null) {
-                    return;
-                }
-                // Read dirtiness before moving the baseline under it: an
-                // edit in progress is someone's count of the shelf, and it
-                // stays staged rather than being overwritten.
-                const wasStaged = entry.qty !== entry.saved;
+// The shelf moved: a request was filled, or someone counted the same bin on
+// another machine. Update the counts in place rather than redrawing — a
+// redraw would throw away whatever is expanded and wherever the cursor is.
+function syncEntriesFromStock() {
+    entries.forEach((entry) => {
+        const stored = stockAt([
+            entry.path.rack, entry.path.bay, entry.path.itemClass, entry.path.item,
+        ]);
+        if (stored == null) {
+            return;
+        }
+        // Read dirtiness before moving the baseline under it: an edit in
+        // progress is someone's count of the shelf, and it stays staged
+        // rather than being overwritten by what arrived.
+        const wasStaged = entry.qty !== entry.saved;
 
-                entry.item.qty = stored;
-                entry.saved = stored;
-                if (!wasStaged) {
-                    entry.qty = stored;
-                }
-                syncEntry(entry);
-            });
-            syncSaveButton();
-        })
-        .catch((error) => console.error("inventory:", error.message));
-});
+        entry.item.qty = stored;
+        entry.saved = stored;
+        if (!wasStaged) {
+            entry.qty = stored;
+        }
+        syncEntry(entry);
+    });
+
+    syncSaveButton();
+}
+
+document.addEventListener("inventorychange", syncEntriesFromStock);
 
 loadInventory()
     .then(() => {

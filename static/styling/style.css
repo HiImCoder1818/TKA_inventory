@@ -2357,6 +2357,53 @@ body.is-locked {
 
 /* ---- Who is signed in, in the top bar ---- */
 
+/* ---- Live connection ---- */
+
+/* A dot when all is well, words only when it isn't: a working connection is
+   the expected case and shouldn't take up the bar saying so. */
+.live {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.live__dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 0.15rem rgba(34, 197, 94, 0.18);
+}
+
+.live__label {
+    display: none;
+    color: #fbbf24;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.live[data-state="off"] .live__dot {
+    background: #fbbf24;
+    box-shadow: 0 0 0 0.15rem rgba(251, 191, 36, 0.18);
+    animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+.live[data-state="off"] .live__label {
+    display: inline;
+}
+
+@keyframes live-pulse {
+    50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .live[data-state="off"] .live__dot {
+        animation: none;
+    }
+}
+
 .account {
     flex: 0 0 auto;
     display: flex;

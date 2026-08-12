@@ -243,11 +243,35 @@ function renderRequests() {
     syncRequestSave();
 }
 
+// Drop staged edits that the new queue has overtaken: a request someone else
+// resolved, a part no longer on it, or a trim that turned out to match what
+// is now stored. What is left is still a real edit, and stays staged.
+function pruneStaged() {
+    const live = new Map();
+    openRequests.forEach((entry) => {
+        (entry.parts || []).forEach((part) => {
+            live.set(partKey(entry.id, part.path), part.qty);
+        });
+    });
+
+    [...staged.keys()].forEach((key) => {
+        if (!live.has(key) || live.get(key) === staged.get(key)) {
+            staged.delete(key);
+        }
+    });
+}
+
 // The queue is read against stock, so both have to be current before it can
 // be drawn. A failed stock read isn't fatal — the caps just go away and the
 // server has the last word.
-function refreshRequests() {
-    staged.clear();
+//
+// `keepStaged` is for a refresh nobody asked for — someone else's change
+// arriving over the live connection. A trim half-made is still the reviewer's
+// to finish, so the numbers underneath it move and the edit stays.
+function refreshRequests({ keepStaged = false } = {}) {
+    if (!keepStaged) {
+        staged.clear();
+    }
 
     return Promise.all([
         getJson(window.REQUESTS_URL),
@@ -257,6 +281,7 @@ function refreshRequests() {
     ])
         .then(([entries]) => {
             openRequests = entries;
+            pruneStaged();
             drawerError(reviewPanel, "");
             renderRequests();
         })
@@ -326,7 +351,7 @@ function saveRequestQtys() {
 
     fetch(window.REQUESTS_QTY_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: liveHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ changes }),
     })
         .then(async (response) => {
@@ -338,7 +363,7 @@ function saveRequestQtys() {
         })
         // Re-read rather than patching in place: the reply is the file, and
         // someone else may have resolved something while this was open.
-        .then(refreshRequests)
+        .then(() => refreshRequests())
         .then(syncRequestSave)
         .catch((error) => {
             console.error("requests:", error.message);
@@ -353,7 +378,8 @@ function resolveRequest(id, button) {
     button.disabled = true;
     button.textContent = "Resolving…";
 
-    fetch(`${window.REQUESTS_URL}/${encodeURIComponent(id)}/resolve`, { method: "POST" })
+    fetch(`${window.REQUESTS_URL}/${encodeURIComponent(id)}/resolve`,
+        { method: "POST", headers: liveHeaders() })
         .then(async (response) => {
             const body = await response.json();
             if (!response.ok) {
@@ -363,8 +389,9 @@ function resolveRequest(id, button) {
         })
         .then(async (body) => {
             // Stock just moved, so whatever is on screen behind the drawer
-            // is now out of date.
-            document.dispatchEvent(new CustomEvent("inventorychange"));
+            // is now out of date. We suppress our own live echo, so this is
+            // the one place that has to say so.
+            await refreshInventory();
             await refreshRequests();
 
             // The shelf can come up short between asking and filling; say
@@ -482,6 +509,22 @@ function initReview() {
 
     document.addEventListener("accountchange", maybeRefresh);
     document.addEventListener("modechange", maybeRefresh);
+
+    // Somebody else sent, trimmed or filled a request. Re-read what moved,
+    // keeping whatever this reviewer has staged but not yet saved.
+    document.addEventListener("datachange", (event) => {
+        const changed = (event.detail && event.detail.changed) || [];
+
+        if (changed.includes("requests") && currentAccount()
+            && document.body.dataset.mode === "edit") {
+            refreshRequests({ keepStaged: true });
+        }
+        // The log only matters while someone is reading it.
+        if (changed.includes("history") && historyPanel && !historyPanel.hidden) {
+            refreshHistory();
+        }
+    });
+
     maybeRefresh();
 }
 

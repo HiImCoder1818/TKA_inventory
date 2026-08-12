@@ -157,7 +157,7 @@ async function loadInventory() {
 async function saveQuantities(changes) {
     const response = await fetch(window.INVENTORY_QTY_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: liveHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ changes }),
     });
     const body = await response.json();
@@ -178,7 +178,7 @@ function itemKey(path) {
 async function replaceInventory(data) {
     const response = await fetch(window.INVENTORY_URL, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: liveHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data),
     });
     const body = await response.json();

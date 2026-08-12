@@ -33,6 +33,12 @@
         Cart <span class="cart-btn__count" data-cart-count>0</span>
     </button>
 
+    {# Whether this page is still hearing about other people's changes. #}
+    <span class="live" data-state="off" title="Connecting&hellip;">
+        <i class="live__dot" aria-hidden="true"></i>
+        <span class="live__label">Reconnecting&hellip;</span>
+    </span>
+
     {# Who is signed in; filled in by auth.js. #}
     <div class="account" hidden>
         <span class="account__who">

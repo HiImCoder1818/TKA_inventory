@@ -490,4 +490,17 @@ function initEditor(options = {}) {
     dialog.querySelectorAll("[data-editor-save]").forEach((el) => {
         el.addEventListener("click", () => save(el));
     });
+
+    // The editor works on a copy taken when it opened, and saving replaces
+    // the whole document. If someone else changes inv.json in the meantime,
+    // saving would quietly undo their work — so say so rather than letting
+    // the live refresh happen invisibly behind the dialog.
+    document.addEventListener("inventorychange", () => {
+        if (dialog.open) {
+            showProblems([
+                "inv.json changed somewhere else while this was open. Saving now would",
+                "overwrite that change — close and reopen the editor to start from it.",
+            ]);
+        }
+    });
 }

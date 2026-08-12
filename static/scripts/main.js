@@ -91,18 +91,16 @@ wire(plan);
 wire(table);
 
 // Saving the editor rewrites the whole document, so the plan re-reads it
-// rather than guessing at what changed.
+// rather than guessing at what changed. Our own writes don't come back over
+// the live connection, so this is what redraws them.
 initEditor({
-    onSaved: () => loadInventory().then(applyToPlan),
+    onSaved: () => refreshInventory(),
 });
 
-// Filling a request empties shelves, so the plan re-reads rather than
-// carrying counts from before the handover.
-document.addEventListener("inventorychange", () => {
-    loadInventory().then(applyToPlan).catch((error) => {
-        console.error("inventory:", error.message);
-    });
-});
+// The shelf moved — someone filled a request, or counted a bin on another
+// machine. The inventory has already been re-read by the time this fires, so
+// the plan just redraws from it.
+document.addEventListener("inventorychange", applyToPlan);
 
 loadInventory()
     .then(() => {

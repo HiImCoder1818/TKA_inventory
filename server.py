@@ -1,13 +1,15 @@
 import hmac
 import json
 import os
+import queue
 import re
 import tempfile
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 app = Flask(__name__)
 
@@ -23,6 +25,97 @@ HISTORY_PATH = Path(__file__).parent / "history.json"
 # Items are single-key objects; keeping them on one line means a quantity
 # change stays a one-line diff in git.
 _QTY_INLINE = re.compile(r'\{\s*"qty":\s*(-?\d+)\s*\}')
+
+
+# ------------------------------ live updates ------------------------------
+#
+# Two people work this inventory at once: someone counting a shelf and
+# someone filling requests from it. Whenever one of them changes a file, the
+# other's screen is wrong until they reload. So every write announces itself,
+# and each open page holds a stream it listens on.
+#
+# Server-sent events rather than websockets: the traffic only ever goes one
+# way — the server saying "this changed, re-read it" — and EventSource
+# reconnects on its own when the server restarts, which during development it
+# does constantly.
+#
+# The announcement carries no data, only the names of what moved. Pages
+# re-read through the same endpoints they already use, so there is one way to
+# load a thing rather than two that can disagree.
+
+_listeners = []
+_listeners_lock = threading.Lock()
+
+# How long a stream waits before sending a comment frame to prove it is still
+# there. Proxies and browsers drop a connection that goes quiet — and it is
+# also how a listener that vanished without saying so gets noticed, since the
+# failed write is what ends its thread. A closed tab costs a thread until the
+# next beat, and no longer.
+HEARTBEAT_SECONDS = 20
+
+
+def announce(*changed, origin=None):
+    """Tell every open page which files just changed.
+
+    `origin` is the client that made the change, if it said who it was; it
+    skips its own echo, having already applied the result of its own request.
+    """
+    payload = json.dumps({
+        "changed": sorted(set(changed)),
+        "origin": origin,
+        "at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    })
+
+    with _listeners_lock:
+        waiting = list(_listeners)
+
+    for outbox in waiting:
+        try:
+            outbox.put_nowait(payload)
+        except queue.Full:
+            # A page too far behind to keep up will re-read everything when
+            # it reconnects, so dropping the notice costs nothing.
+            pass
+
+
+def client_id():
+    """Which page made this request, if it identified itself."""
+    return request.headers.get("X-Client-Id") or None
+
+
+@app.get("/api/events")
+def events():
+    """The stream each open page listens on."""
+    def stream():
+        outbox = queue.Queue(maxsize=64)
+        with _listeners_lock:
+            _listeners.append(outbox)
+
+        try:
+            # Reconnect briskly: a restart during development shouldn't leave
+            # pages stale for the browser's three-second default.
+            yield "retry: 1000\n\n"
+            yield "event: ready\ndata: {}\n\n"
+
+            while True:
+                try:
+                    payload = outbox.get(timeout=HEARTBEAT_SECONDS)
+                except queue.Empty:
+                    yield ": ping\n\n"
+                    continue
+                yield f"data: {payload}\n\n"
+        finally:
+            with _listeners_lock:
+                if outbox in _listeners:
+                    _listeners.remove(outbox)
+
+    return Response(stream(), mimetype="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        # Nginx buffers streamed responses by default, which holds every
+        # event until the connection closes.
+        "X-Accel-Buffering": "no",
+    })
 
 
 def read_inventory():
@@ -323,6 +416,7 @@ def replace_inventory():
         return jsonify({"error": str(exc)}), 400
 
     write_inventory(data)
+    announce("inventory", origin=client_id())
     return jsonify(data)
 
 
@@ -380,6 +474,7 @@ def update_qty():
         saved.append({**path, "qty": quantity})
 
     write_inventory(data)
+    announce("inventory", origin=client_id())
 
     return jsonify({"changes": saved})
 
@@ -459,6 +554,10 @@ def create_request():
     write_requests(entries)
     log_request(entry)
 
+    # The queue growing is the whole point of the filling side's screen, so
+    # this is the announcement that matters most.
+    announce("requests", "history", origin=client_id())
+
     return jsonify(entry), 201
 
 
@@ -514,6 +613,10 @@ def resolve_request(request_id):
     write_inventory(inventory)
     write_requests([entry for entry in entries if entry.get("id") != request_id])
     log_resolved(request_id, when, fulfilled)
+
+    # A fill touches all three: the queue shrinks, the shelf empties, the log
+    # gains a resolution.
+    announce("requests", "history", "inventory", origin=client_id())
 
     return jsonify({
         "resolved": request_id,
@@ -591,6 +694,8 @@ def update_request_qty():
         if entry is not None:
             log_trimmed(entry_id, entry.get("parts", []))
 
+    announce("requests", "history", origin=client_id())
+
     return jsonify({"changes": len(staged)})
 
 
@@ -605,4 +710,7 @@ def list_history():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8000)
+    # threaded is the default, but say so: every open page holds an event
+    # stream for as long as it is open, and a single-threaded server would
+    # serve the first one and hang for everybody else.
+    app.run(debug=True, port=8000, threaded=True)
