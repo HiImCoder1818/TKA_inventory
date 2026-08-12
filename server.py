@@ -54,6 +54,16 @@ _listeners_lock = threading.Lock()
 HEARTBEAT_SECONDS = 20
 
 
+def send_to(listeners, frame):
+    for listener in listeners:
+        try:
+            listener["outbox"].put_nowait(frame)
+        except queue.Full:
+            # A page too far behind to keep up will re-read everything when
+            # it reconnects, so dropping a frame costs nothing.
+            pass
+
+
 def announce(*changed, origin=None):
     """Tell every open page which files just changed.
 
@@ -69,13 +79,30 @@ def announce(*changed, origin=None):
     with _listeners_lock:
         waiting = list(_listeners)
 
-    for outbox in waiting:
-        try:
-            outbox.put_nowait(payload)
-        except queue.Full:
-            # A page too far behind to keep up will re-read everything when
-            # it reconnects, so dropping the notice costs nothing.
-            pass
+    send_to(waiting, f"data: {payload}\n\n")
+
+
+def notify(name, notice):
+    """Send one person word of something that happened to their request.
+
+    Addressed by the name they signed in under, which each page reports when
+    it opens its stream. Nothing checks that claim — the same as everywhere
+    else here, since there is no session — so this routes a message to the
+    right screen rather than keeping it from the wrong one.
+    """
+    if not name:
+        return
+
+    payload = json.dumps({
+        **notice,
+        "for": name,
+        "at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    })
+
+    with _listeners_lock:
+        waiting = [item for item in _listeners if item["who"] == name]
+
+    send_to(waiting, f"event: notice\ndata: {payload}\n\n")
 
 
 def client_id():
@@ -85,11 +112,22 @@ def client_id():
 
 @app.get("/api/events")
 def events():
-    """The stream each open page listens on."""
+    """The stream each open page listens on.
+
+    `who` is the name the page is signed in under, so a message meant for one
+    person reaches their screen rather than everybody's. A page reconnects
+    with a new `who` when somebody signs in or out.
+    """
+    # Read before streaming: the generator below runs after this request's
+    # context has been torn down, so `request` is gone by the time it starts.
+    who = request.args.get("who") or None
+
     def stream():
-        outbox = queue.Queue(maxsize=64)
+        listener = {"outbox": queue.Queue(maxsize=64), "who": who}
+        outbox = listener["outbox"]
+
         with _listeners_lock:
-            _listeners.append(outbox)
+            _listeners.append(listener)
 
         try:
             # Reconnect briskly: a restart during development shouldn't leave
@@ -103,11 +141,13 @@ def events():
                 except queue.Empty:
                     yield ": ping\n\n"
                     continue
-                yield f"data: {payload}\n\n"
+                # Frames arrive fully formed: a broadcast and a message for
+                # one person differ only in who they were queued to.
+                yield payload
         finally:
             with _listeners_lock:
-                if outbox in _listeners:
-                    _listeners.remove(outbox)
+                if listener in _listeners:
+                    _listeners.remove(listener)
 
     return Response(stream(), mimetype="text/event-stream", headers={
         "Cache-Control": "no-cache",
@@ -174,7 +214,7 @@ def dump_requests(entries):
     """Render a request list by hand, so each part stays on one line the way
     requests.json was first written rather than being fanned out by json.dump.
 
-    Shared with history.json, which is the same shape plus resolvedAt.
+    Shared with history.json, which is the same shape plus how it ended.
     """
     if not entries:
         return "[]\n"
@@ -184,8 +224,12 @@ def dump_requests(entries):
         lines.append("    {")
         for field in ("id", "name", "at", "note"):
             lines.append(f'        "{field}": {json.dumps(entry.get(field, ""))},')
-        if "resolvedAt" in entry:
-            lines.append(f'        "resolvedAt": {json.dumps(entry["resolvedAt"])},')
+
+        # How it ended, on a history entry: filled, turned down and why, or
+        # neither yet.
+        for field in ("resolvedAt", "declinedAt", "reason"):
+            if field in entry:
+                lines.append(f'        "{field}": {json.dumps(entry[field])},')
         # "fulfilled" is what actually came off the shelf, which can differ
         # from what was asked for once a request has been trimmed.
         blocks = ["parts"]
@@ -249,7 +293,7 @@ def log_trimmed(request_id, parts):
     """
     history = read_history()
     for entry in history:
-        if entry.get("id") == request_id and not entry.get("resolvedAt"):
+        if entry.get("id") == request_id and not settled(entry):
             entry["parts"] = [dict(part) for part in parts]
     write_history(history)
 
@@ -263,10 +307,34 @@ def log_resolved(request_id, when, fulfilled):
     """
     history = read_history()
     for entry in history:
-        if entry.get("id") == request_id and not entry.get("resolvedAt"):
+        if entry.get("id") == request_id and not settled(entry):
             entry["resolvedAt"] = when
             entry["fulfilled"] = fulfilled
     write_history(history)
+
+
+def log_declined(request_id, when, reason):
+    """Stamp the history entry for a request that was turned down.
+
+    Nothing comes off the shelf, so there is no `fulfilled` block — a decline
+    is a request that ended without parts moving, and the log says so along
+    with whatever reason was given.
+    """
+    history = read_history()
+    for entry in history:
+        if entry.get("id") == request_id and not settled(entry):
+            # The null resolvedAt is what marked it still open; a declined
+            # request isn't open and was never resolved, so drop it rather
+            # than leave both stamps sitting there.
+            entry.pop("resolvedAt", None)
+            entry["declinedAt"] = when
+            entry["reason"] = reason
+    write_history(history)
+
+
+def settled(entry):
+    """Has this history entry already been filled or turned down?"""
+    return bool(entry.get("resolvedAt") or entry.get("declinedAt"))
 
 
 def stock_of(inventory, path):
@@ -618,12 +686,61 @@ def resolve_request(request_id):
     # gains a resolution.
     announce("requests", "history", "inventory", origin=client_id())
 
+    # And the person who asked wants to know their parts are waiting, which
+    # nothing else on their screen would tell them.
+    notify(target.get("name"), {
+        "kind": "resolved",
+        "requestId": request_id,
+        "lines": len(fulfilled),
+        "items": sum(part["qty"] for part in fulfilled),
+        "short": short,
+    })
+
     return jsonify({
         "resolved": request_id,
         "resolvedAt": when,
         "open": len(entries) - 1,
         "fulfilled": fulfilled,
         "short": short,
+    })
+
+
+@app.post("/api/requests/<request_id>/decline")
+def decline_request(request_id):
+    """Turn a request down: off the queue, into the log, nothing off the shelf.
+
+    The counterpart to resolving. Both end a request and both are final —
+    what separates them is whether any parts moved. A reason is optional but
+    worth giving: it is the only thing the person who asked will be told
+    beyond the fact that they aren't getting the parts.
+    """
+    payload = request.get_json(silent=True) or {}
+    reason = str(payload.get("reason") or "").strip()
+
+    entries = read_requests()
+    target = next((entry for entry in entries if entry.get("id") == request_id), None)
+
+    if target is None:
+        return jsonify({"error": f"no open request with id {request_id}"}), 404
+
+    when = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+    write_requests([entry for entry in entries if entry.get("id") != request_id])
+    log_declined(request_id, when, reason)
+
+    announce("requests", "history", origin=client_id())
+
+    notify(target.get("name"), {
+        "kind": "declined",
+        "requestId": request_id,
+        "reason": reason,
+    })
+
+    return jsonify({
+        "declined": request_id,
+        "declinedAt": when,
+        "reason": reason,
+        "open": len(entries) - 1,
     })
 
 

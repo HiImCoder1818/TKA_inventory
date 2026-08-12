@@ -67,12 +67,122 @@ function refreshInventory() {
         });
 }
 
+// ------------------------------- notices -------------------------------
+
+// A message addressed to whoever is signed in on this page: their request
+// filled, or turned down. It arrives while they are looking at something
+// else, so it announces itself and then gets out of the way.
+const NOTICE_MS = 12000;
+
+function noticeText(notice) {
+    if (notice.kind === "declined") {
+        return {
+            tone: "declined",
+            title: "Request declined",
+            body: notice.reason
+                ? notice.reason
+                : "No reason was given. Ask whoever handles the stores.",
+        };
+    }
+
+    const short = notice.short || [];
+    const items = notice.items || 0;
+    const counted = `${items} item${items === 1 ? "" : "s"}`;
+
+    if (short.length) {
+        const named = short
+            .map((item) => `${displayName(item.item)} (${item.taken} of ${item.wanted})`)
+            .join(", ");
+        return {
+            tone: "part",
+            title: "Request resolved — partly",
+            body: `${counted} ready to collect. Short on ${named}.`,
+        };
+    }
+
+    return {
+        tone: "done",
+        title: "Request resolved",
+        body: `Your parts are ready to collect — ${counted}.`,
+    };
+}
+
+function showNotice(notice) {
+    const tray = document.querySelector(".notices");
+    if (!tray) {
+        return;
+    }
+
+    const { tone, title, body } = noticeText(notice);
+
+    const card = document.createElement("article");
+    card.className = `notice notice--${tone}`;
+
+    const heading = document.createElement("p");
+    heading.className = "notice__title";
+    heading.textContent = title;
+
+    const text = document.createElement("p");
+    text.className = "notice__body";
+    text.textContent = body;
+
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "notice__close";
+    close.textContent = "×";
+    close.setAttribute("aria-label", "Dismiss");
+
+    const dismiss = () => {
+        card.classList.add("notice--going");
+        // Let it fade rather than vanish, but don't depend on the animation
+        // firing to actually remove it.
+        window.setTimeout(() => card.remove(), 200);
+    };
+
+    close.addEventListener("click", dismiss);
+    card.append(heading, text, close);
+    tray.append(card);
+
+    window.setTimeout(dismiss, NOTICE_MS);
+}
+
+// -------------------------------- stream --------------------------------
+
+// The stream is opened per signed-in name, so a message meant for one person
+// reaches their screen. Signing in or out reopens it under the new name.
+function streamUrl() {
+    const account = currentAccount();
+    if (!account || !account.name) {
+        return window.EVENTS_URL;
+    }
+    return `${window.EVENTS_URL}?who=${encodeURIComponent(account.name)}`;
+}
+
+function reconnectLive() {
+    if (liveSource) {
+        liveSource.close();
+        liveSource = null;
+    }
+    // A reopened stream is a fresh connection, not a recovery: the page
+    // already has what it needs, so don't make it re-read everything.
+    hasConnected = false;
+    connectLive();
+}
+
 function connectLive() {
     if (!window.EVENTS_URL || liveSource) {
         return;
     }
 
-    liveSource = new EventSource(window.EVENTS_URL);
+    liveSource = new EventSource(streamUrl());
+
+    liveSource.addEventListener("notice", (event) => {
+        try {
+            showNotice(JSON.parse(event.data));
+        } catch (error) {
+            console.warn("live: could not read a notice", error);
+        }
+    });
 
     liveSource.addEventListener("ready", () => {
         setLiveState("on", "Updating as others make changes");
@@ -112,6 +222,11 @@ function connectLive() {
 function initLive() {
     liveChip = document.querySelector(".live");
     setLiveState("off", "Connecting…");
+
+    // Who this page is signed in as decides which messages are for it, so a
+    // sign-in or sign-out reopens the stream under the new name.
+    document.addEventListener("accountchange", reconnectLive);
+
     connectLive();
 }
 

@@ -1,0 +1,9 @@
+{#
+    Word from the filling side, addressed to whoever is signed in here: a
+    request filled, or turned down. Stacked bottom-right and filled in by
+    live.js as messages arrive down the event stream.
+
+    aria-live so a screen reader hears it too — the whole point is that it
+    arrives while you are looking at something else.
+#}
+<div class="notices" role="status" aria-live="polite" aria-label="Notices"></div>

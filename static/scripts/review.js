@@ -229,18 +229,87 @@ function renderRequests() {
 
     openRequests.forEach((entry) => {
         const card = requestCard(entry, true);
+        const head = card.querySelector(".req-card__head");
+
+        const decline = document.createElement("button");
+        decline.type = "button";
+        decline.className = "req-card__decline";
+        decline.textContent = "Decline";
 
         const resolve = document.createElement("button");
         resolve.type = "button";
         resolve.className = "req-card__resolve";
         resolve.textContent = "Resolve";
         resolve.addEventListener("click", () => resolveRequest(entry.id, resolve));
-        card.querySelector(".req-card__head").append(resolve);
+
+        // Turning someone down is worth a second click and a word about why,
+        // so the button opens the strip rather than doing it outright.
+        const strip = declineStrip(entry, card);
+        decline.addEventListener("click", () => {
+            strip.hidden = !strip.hidden;
+            if (!strip.hidden) {
+                strip.querySelector(".req-decline__reason").focus();
+            }
+        });
+
+        // Grouped so the pair travels together to the right of the head,
+        // rather than each claiming its own share of the leftover width.
+        const actions = document.createElement("span");
+        actions.className = "req-card__actions";
+        actions.append(decline, resolve);
+
+        head.append(actions);
+        card.append(strip);
 
         reviewList.append(card);
     });
 
     syncRequestSave();
+}
+
+// The confirm step for a decline: a reason, and the button that means it.
+function declineStrip(entry, card) {
+    const strip = document.createElement("div");
+    strip.className = "req-decline";
+    strip.hidden = true;
+
+    const reason = document.createElement("input");
+    reason.type = "text";
+    reason.className = "req-decline__reason";
+    reason.placeholder = "Why? (optional, but they'll only see this)";
+    reason.setAttribute("aria-label", `Why ${entry.name}'s request is being declined`);
+
+    const confirm = document.createElement("button");
+    confirm.type = "button";
+    confirm.className = "req-decline__go";
+    confirm.textContent = "Decline request";
+    confirm.addEventListener("click", () => {
+        declineRequest(entry.id, reason.value, confirm);
+    });
+
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "req-decline__cancel";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", () => {
+        strip.hidden = true;
+        reason.value = "";
+    });
+
+    // Enter is the obvious way to finish typing a reason.
+    reason.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            confirm.click();
+        }
+        if (event.key === "Escape") {
+            cancel.click();
+            card.querySelector(".req-card__decline").focus();
+        }
+    });
+
+    strip.append(reason, cancel, confirm);
+    return strip;
 }
 
 // Drop staged edits that the new queue has overtaken: a request someone else
@@ -413,6 +482,34 @@ function resolveRequest(id, button) {
         });
 }
 
+// The other way a request ends. Nothing comes off the shelf, so there is no
+// inventory to re-read — only the queue and the log.
+function declineRequest(id, reason, button) {
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = "Declining…";
+
+    fetch(`${window.REQUESTS_URL}/${encodeURIComponent(id)}/decline`, {
+        method: "POST",
+        headers: liveHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ reason: reason || "" }),
+    })
+        .then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) {
+                throw new Error(body.error || `could not decline (${response.status})`);
+            }
+            return body;
+        })
+        .then(() => refreshRequests())
+        .catch((error) => {
+            console.error("requests:", error.message);
+            drawerError(reviewPanel, error.message);
+            button.disabled = false;
+            button.textContent = label;
+        });
+}
+
 // -------------------------------- history --------------------------------
 
 function renderHistory() {
@@ -436,11 +533,23 @@ function renderHistory() {
         if (entry.resolvedAt) {
             state.className = "req-card__state req-card__state--done";
             state.textContent = `Resolved ${whenText(entry.resolvedAt)}`;
+        } else if (entry.declinedAt) {
+            state.className = "req-card__state req-card__state--declined";
+            state.textContent = `Declined ${whenText(entry.declinedAt)}`;
         } else {
             state.className = "req-card__state req-card__state--open";
             state.textContent = "Open";
         }
         card.querySelector(".req-card__head").append(state);
+
+        // Why it was turned down, kept apart from the note the requester
+        // wrote — they are two different people talking.
+        if (entry.declinedAt && entry.reason) {
+            const reason = document.createElement("p");
+            reason.className = "req-card__reason";
+            reason.textContent = entry.reason;
+            card.append(reason);
+        }
 
         historyList.append(card);
     });

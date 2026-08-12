@@ -2045,8 +2045,105 @@ body:not([data-role="admin"]) .history-btn {
     font-size: 0.68rem;
 }
 
-.req-card__resolve {
+.req-card__actions {
     margin-left: auto;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* Declining is the quieter of the two: available, but not the thing the eye
+   lands on when the parts are sitting on the shelf ready to hand over. */
+.req-card__decline {
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 0.4rem;
+    background: var(--bg);
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 0.73rem;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.req-card__decline:hover {
+    border-color: #7f3d3d;
+    color: #fca5a5;
+}
+
+.req-decline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    border: 1px solid #7f3d3d;
+    border-radius: 0.4rem;
+    background: #2a1616;
+}
+
+.req-decline[hidden] {
+    display: none;
+}
+
+/* The reason gets the whole first row and the buttons share the second, so
+   the pair sits together instead of wrapping unevenly. */
+.req-decline__reason {
+    flex: 1 1 100%;
+    min-width: 0;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 0.35rem;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.73rem;
+}
+
+.req-decline__reason:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+}
+
+.req-decline__cancel {
+    margin-left: auto;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 0.35rem;
+    background: var(--bg-panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.73rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.req-decline__go {
+    padding: 0.4rem 0.7rem;
+    border: 1px solid #a13d3d;
+    border-radius: 0.35rem;
+    background: linear-gradient(#e05a5a, #c23b3b);
+    color: #2a0d0d;
+    font: inherit;
+    font-size: 0.73rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.req-decline__go:hover:not(:disabled) {
+    background: linear-gradient(#f07c7c, #e05a5a);
+}
+
+.req-decline__go:disabled {
+    border-color: var(--line);
+    background: var(--bg);
+    color: var(--text-dim);
+    cursor: default;
+}
+
+.req-card__resolve {
     padding: 0.35rem 0.7rem;
     border: 1px solid #2f6b45;
     border-radius: 0.4rem;
@@ -2086,6 +2183,24 @@ body:not([data-role="admin"]) .history-btn {
 .req-card__state--open {
     background: #3a2e14;
     color: #fbbf24;
+}
+
+.req-card__state--declined {
+    background: #3a1d1d;
+    color: #fca5a5;
+}
+
+/* Why it was turned down — the filling side talking back, kept visually
+   apart from the note the requester wrote. */
+.req-card__reason {
+    margin: 0.5rem 0 0;
+    padding: 0.45rem 0.55rem;
+    border-left: 2px solid #c23b3b;
+    border-radius: 0 0.3rem 0.3rem 0;
+    background: var(--bg);
+    color: #fca5a5;
+    font-size: 0.74rem;
+    line-height: 1.5;
 }
 
 .req-card__parts {
@@ -2356,6 +2471,106 @@ body.is-locked {
 }
 
 /* ---- Who is signed in, in the top bar ---- */
+
+/* -------------------------- Notices ---------------------------- */
+
+/* Word from the filling side, arriving while you are looking at something
+   else. Bottom-right, above the drawers, out of the way of the top bar. */
+.notices {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 60;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+    width: min(22rem, calc(100vw - 2rem));
+    pointer-events: none;
+}
+
+.notice {
+    position: relative;
+    pointer-events: auto;
+    padding: 0.7rem 2rem 0.7rem 0.85rem;
+    border: 1px solid var(--line);
+    border-left-width: 3px;
+    border-radius: 0.5rem;
+    background: var(--bg-panel);
+    box-shadow: 0 0.6rem 1.6rem rgba(0, 0, 0, 0.45);
+    animation: notice-in 0.18s ease-out;
+}
+
+.notice--done {
+    border-left-color: #22c55e;
+}
+
+.notice--part {
+    border-left-color: #fbbf24;
+}
+
+.notice--declined {
+    border-left-color: #c23b3b;
+}
+
+.notice--going {
+    opacity: 0;
+    transition: opacity 0.18s ease-in;
+}
+
+.notice__title {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.notice--done .notice__title {
+    color: #86efac;
+}
+
+.notice--part .notice__title {
+    color: #fbbf24;
+}
+
+.notice--declined .notice__title {
+    color: #fca5a5;
+}
+
+.notice__body {
+    margin: 0.2rem 0 0;
+    color: var(--text-dim);
+    font-size: 0.74rem;
+    line-height: 1.45;
+}
+
+.notice__close {
+    position: absolute;
+    top: 0.3rem;
+    right: 0.35rem;
+    width: 1.3rem;
+    height: 1.3rem;
+    border: 0;
+    border-radius: 0.3rem;
+    background: none;
+    color: var(--text-dim);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.notice__close:hover {
+    background: var(--bg-panel-2);
+    color: var(--text);
+}
+
+@keyframes notice-in {
+    from { opacity: 0; transform: translateY(0.4rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .notice {
+        animation: none;
+    }
+}
 
 /* ---- Live connection ---- */
 
