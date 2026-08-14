@@ -9,19 +9,22 @@
 // inv.json shape
 // ---------------------------------------------------------------------------
 //   "<number><name>": {          e.g. "1parts", "5Tournaments/Meets"
-//       "type": "server" | "std",
+//       "type": "server" | "std" | "grid",
 //       "width": 0.5,            optional, standard racks: how wide this one
 //                                is next to a full-width rack. Absent means 1.
 //       "<level>": {             any key other than those two is a level:
 //                                "front" / "back" / "top" / "level 4" / ...
 //           "<item class>": {
+//               "cols": 8,       optional, grid racks: the compartment grid
+//               "rows": 8,       this block is arranged in.
 //               "<item>": { "qty": 2 }
 //           }
 //       }
 //   }
 //
 // A standard rack has as many levels as it has level keys, drawn top to
-// bottom in file order; a server rack's are faces, drawn side by side.
+// bottom in file order; a server rack's are faces, drawn side by side; a grid
+// rack's are faces too, each holding blocks of small-part compartments.
 // Adding a rack, a level, a class, an item or a quantity is an edit to
 // inv.json alone — no code change, and nothing here needs to know the names
 // in advance.
@@ -66,21 +69,36 @@ function parseRackKey(key) {
 // Every level keeps its raw `key` next to the display `name`, because an edit
 // has to address inv.json by the exact keys it was written with.
 
-// { "item 1": { qty: 2 } } -> [{ key, name, qty }]
-function parseItems(entry) {
-    return Object.entries(entry || {}).map(([key, meta]) => ({
-        key,
-        name: displayName(key),
-        qty: meta && meta.qty != null ? meta.qty : 1,
-    }));
+// An item class's own settings, as opposed to the items in it. Grid racks
+// use these; every other key is an item.
+const SLOT_FIELDS = new Set(["cols", "rows"]);
+
+function gridSize(value) {
+    const size = Math.floor(Number(value));
+    return Number.isFinite(size) && size > 0 ? size : null;
 }
 
-// { "item class 1": {...} } -> [{ key, name, items }]
+// { "item 1": { qty: 2 } } -> [{ key, name, qty }]
+function parseItems(entry) {
+    return Object.entries(entry || {})
+        .filter(([key]) => !SLOT_FIELDS.has(key))
+        .map(([key, meta]) => ({
+            key,
+            name: displayName(key),
+            qty: meta && meta.qty != null ? meta.qty : 1,
+        }));
+}
+
+// { "item class 1": {...} } -> [{ key, name, cols, rows, items }]
 function parseSlots(entry) {
-    return Object.entries(entry || {}).map(([key, items]) => ({
+    return Object.entries(entry || {}).map(([key, slot]) => ({
         key,
         name: displayName(key),
-        items: parseItems(items),
+        // How the compartments are arranged, on a grid rack. Null elsewhere:
+        // a shelf box has no rows and columns to speak of.
+        cols: gridSize(slot && slot.cols),
+        rows: gridSize(slot && slot.rows),
+        items: parseItems(slot),
     }));
 }
 

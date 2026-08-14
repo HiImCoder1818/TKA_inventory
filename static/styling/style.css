@@ -533,7 +533,7 @@ button.zone.is-navigable::after {
 
 .zone--rack-dark {
     background-color: var(--rack-dark);
-    border-color: #3c424b;
+    border-color: #3d4655;
 }
 
 /* ------------------------- Non-interactive decor ------------------------- */
@@ -763,6 +763,158 @@ button.zone.is-navigable::after {
 .board--server .slot {
     flex: 0 0 auto;
     min-height: clamp(2.1rem, 5vh, 3.2rem);
+}
+
+/* --- Grid rack: small parts in blocks of compartments ---
+   Same two-faces-side-by-side frame as a server rack, but each face holds
+   blocks rather than boxes, and a block is drawn as the grid it is. A cabinet
+   of these runs to hundreds of compartments, so the face scrolls rather than
+   shrinking them past reading. */
+
+.board--grid .board__bays {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: clamp(0.8rem, 2.5vw, 2.5rem);
+}
+
+.board--grid .bay {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.4rem, 1vh, 0.8rem);
+    min-height: 0;
+}
+
+.board--grid .bay__name {
+    text-align: center;
+}
+
+.board--grid .bay__shelf {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.board--grid .bay__track {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.7rem, 2vh, 1.6rem);
+    padding: clamp(0.5rem, 1.2vw, 1.2rem);
+}
+
+.grid-slot {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+/* The block's caption is the handle: clicking it works the dropdown in the
+   index, the same as a shelf box. */
+.board--grid .slot--grid {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 0;
+    padding: 0.3rem 0.55rem;
+    text-align: left;
+}
+
+.grid-slot__name {
+    font-size: clamp(0.6rem, 0.85vw, 0.85rem);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* How many compartments across and down — the drawer's own dimensions. */
+.grid-slot__shape {
+    flex: 0 0 auto;
+    color: #3d4655;
+    font-size: clamp(0.52rem, 0.72vw, 0.72rem);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.65;
+}
+
+/* A flat drawer front behind the compartments. Without it the carcass hatch
+   shows between them and the grid reads as stripes rather than as boxes. */
+.grid-slot__cells {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr));
+    gap: clamp(0.16rem, 0.4vw, 0.38rem);
+    padding: clamp(0.2rem, 0.5vw, 0.45rem);
+    border: 0.12rem solid #6d7480;
+    border-radius: 0.25rem;
+    background: #aeb5bf;
+}
+
+.cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1rem;
+    min-height: clamp(1.5rem, 3.8vh, 2.5rem);
+    padding: 0.15rem;
+    border: 1px solid #8b94a1;
+    border-radius: 0.16rem;
+    background: #e8ecf1;
+    color: #12161c;
+    font: inherit;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: inset 0 -0.12rem 0 rgba(0, 0, 0, 0.08);
+}
+
+.cell:hover,
+.cell.is-linked {
+    border-color: var(--accent);
+    background: #eef3fb;
+}
+
+.cell.is-active {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* An empty compartment is still a compartment — the drawer has it whether or
+   not anything is written on it yet. Quieter than a filled one, but drawn:
+   the point of the grid is that you can see how many there are. */
+.cell--empty {
+    background: #c6ccd5;
+    border-color: #9aa2ae;
+    box-shadow: none;
+    cursor: default;
+}
+
+.cell__name {
+    max-width: 100%;
+    font-size: clamp(0.42rem, 0.62vw, 0.62rem);
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cell__qty {
+    font-size: clamp(0.4rem, 0.58vw, 0.58rem);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: #3d4655;
+}
+
+/* Staged but unsaved, and empty — the same amber and grey the index uses. */
+.cell.is-dirty {
+    border-color: #b8860b;
+    background: #f6ecd2;
+}
+
+.cell--out {
+    opacity: 0.55;
 }
 
 .bay__name {
@@ -1467,6 +1619,24 @@ button.zone.is-navigable::after {
 
 .editor__width {
     flex: 0 0 7rem;
+}
+
+.editor__grid {
+    flex: 0 0 4.2rem;
+    min-width: 0;
+    padding: 0.32rem 0.4rem;
+    border: 1px solid var(--line);
+    border-radius: 0.35rem;
+    background: var(--bg-panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.editor__grid:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
 }
 
 .editor__qty {

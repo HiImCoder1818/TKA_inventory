@@ -42,10 +42,14 @@ function toModel(raw) {
                     classes: Object.entries(bay).map(([classKey, itemClass]) => ({
                         key: classKey,
                         open: false,
-                        items: Object.entries(itemClass).map(([itemKey, item]) => ({
-                            key: itemKey,
-                            qty: item && item.qty != null ? item.qty : 0,
-                        })),
+                        cols: itemClass.cols == null ? "" : String(itemClass.cols),
+                        rows: itemClass.rows == null ? "" : String(itemClass.rows),
+                        items: Object.entries(itemClass)
+                            .filter(([itemKey]) => !SLOT_FIELDS.has(itemKey))
+                            .map(([itemKey, item]) => ({
+                                key: itemKey,
+                                qty: item && item.qty != null ? item.qty : 0,
+                            })),
                     })),
                 })),
         };
@@ -65,6 +69,16 @@ function toInventory() {
             const bins = {};
             bay.classes.forEach((itemClass) => {
                 const items = {};
+                // The compartment grid, on a rack that has one. Written ahead
+                // of the items so the shape reads first in the file.
+                if (rack.type === "grid") {
+                    ["cols", "rows"].forEach((field) => {
+                        const size = parseInt(itemClass[field], 10);
+                        if (Number.isFinite(size) && size > 0) {
+                            items[field] = size;
+                        }
+                    });
+                }
                 itemClass.items.forEach((item) => {
                     items[item.key.trim()] = { qty: Number(item.qty) || 0 };
                 });
@@ -181,6 +195,21 @@ function rackNumberField(rack) {
     return select;
 }
 
+// How many compartments across and down a block of small parts is arranged
+// in. Blank means "however many it takes to hold what's in it".
+function gridField(itemClass, field, label) {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.className = "editor__grid";
+    input.min = "1";
+    input.value = itemClass[field] || "";
+    input.placeholder = label;
+    input.title = `Compartments ${label}`;
+    input.setAttribute("aria-label", `Compartments ${label}`);
+    input.addEventListener("input", () => { itemClass[field] = input.value; });
+    return input;
+}
+
 function typeField(rack) {
     const select = document.createElement("select");
     select.className = "editor__type";
@@ -189,6 +218,7 @@ function typeField(rack) {
     [
         ["std", "Standard rack"],
         ["server", "Server rack"],
+        ["grid", "Small parts grid"],
     ].forEach(([value, label]) => {
         const option = document.createElement("option");
         option.value = value;
@@ -312,18 +342,33 @@ function renderItem(itemClass, item, path) {
     );
 }
 
-function renderClass(bay, itemClass, path) {
+function renderClass(rack, bay, itemClass, path) {
+    const fields = [
+        caret(itemClass),
+        textField(itemClass.key, "bin name", (value) => { itemClass.key = value; }),
+    ];
+
+    // On a grid rack a bin is a block of compartments, so it carries the
+    // shape it is arranged in as well as what's in it.
+    if (rack.type === "grid") {
+        fields.push(
+            gridField(itemClass, "cols", "across"),
+            gridField(itemClass, "rows", "down"),
+        );
+    }
+
     const header = row(
         "class",
         path,
-        caret(itemClass),
-        textField(itemClass.key, "bin name", (value) => { itemClass.key = value; }),
-        tally(itemClass.items.length, "item"),
-        button("+", "editor__btn editor__btn--add", "Add an item to this bin", () => {
-            itemClass.items.push({ key: "new item", qty: 0 });
-            itemClass.open = true;
-            render();
-        }),
+        ...fields,
+        tally(itemClass.items.length, rack.type === "grid" ? "filled" : "item"),
+        button("+", "editor__btn editor__btn--add",
+            rack.type === "grid" ? "Fill the next compartment" : "Add an item to this bin",
+            () => {
+                itemClass.items.push({ key: "new item", qty: 0 });
+                itemClass.open = true;
+                render();
+            }),
         button("−", "editor__btn editor__btn--remove", "Remove this bin", () => {
             bay.classes.splice(bay.classes.indexOf(itemClass), 1);
             render();
@@ -369,7 +414,7 @@ function renderBay(rack, bay, path) {
     }
 
     const classes = bay.classes.map((itemClass, index) =>
-        renderClass(bay, itemClass, `${path}.${index}`));
+        renderClass(rack, bay, itemClass, `${path}.${index}`));
     if (!classes.length) {
         const empty = document.createElement("p");
         empty.className = "editor__empty";

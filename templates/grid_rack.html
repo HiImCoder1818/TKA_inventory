@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="{{ url_for('static', filename='styling/style.css') }}">
+
+        <title>Rack &middot; TKA Inventory</title>
+    </head>
+    <body>
+        {% include "partials/login.html" %}
+
+        <header class="topbar">
+            <div class="topbar__brand">
+                <span class="topbar__mark">TKA</span>
+                <h1 class="topbar__title">Inventory</h1>
+            </div>
+
+            <nav class="breadcrumb" aria-label="Location">
+                <span class="breadcrumb__item">Building V</span>
+                <span class="breadcrumb__sep" aria-hidden="true">/</span>
+                <a class="breadcrumb__item breadcrumb__link" href="{{ url_for('index') }}">V-101 &middot; Robotics Storage</a>
+                <span class="breadcrumb__sep" aria-hidden="true">/</span>
+                <span class="breadcrumb__item breadcrumb__item--current">
+                    Rack <span data-fill="number">&mdash;</span> &middot; <span data-fill="items">&mdash;</span>
+                </span>
+            </nav>
+
+            {% include "partials/topbar_tools.html" %}
+        </header>
+
+        <main class="stage">
+            <!--
+                Grid rack: small parts, kept in blocks of compartments rather
+                than on shelves. Each face holds blocks, each block a grid of
+                cols by rows, each compartment one part.
+
+                A cabinet of these runs to hundreds of compartments, so the
+                face scrolls rather than shrinking them to nothing.
+
+                rack.js builds these from the registry.
+            -->
+            <div class="board board--grid">
+                <div class="board__head">
+                    <span class="hex" aria-hidden="true" data-fill="number">&mdash;</span>
+                    <div>
+                        <h2 class="board__title" data-fill="items">&mdash;</h2>
+                        <p class="board__sub">Small parts &middot; <span data-fill="bays">&mdash;</span></p>
+                    </div>
+                    <a class="backlink" href="{{ url_for('index') }}">&larr; Floor plan</a>
+                </div>
+
+                <div class="board__bays"></div>
+            </div>
+
+            <aside class="panel" aria-label="Item index">
+                <h2 class="panel__title">Item Index</h2>
+                <!-- shelf > item class > items, built by rack.js -->
+                <div class="index-scroll">
+                    <div class="tree"></div>
+                </div>
+                <button type="button" class="save-btn" data-save disabled>No changes to save</button>
+                <p class="panel__hint panel__hint--edit">Counts are staged until you save. <kbd>&uarr;</kbd><kbd>&darr;</kbd> move between items, <kbd>+</kbd><kbd>&minus;</kbd> change the count.</p>
+                <p class="panel__hint panel__hint--request">Stock is read-only in request mode. Use <b>Add</b> beside an item to put it on your request.</p>
+            </aside>
+        </main>
+
+        {% include "partials/cart.html" %}
+        {% include "partials/requests.html" %}
+        {% include "partials/history.html" %}
+        {% include "partials/notices.html" %}
+
+        <script>
+            // Resolved by Flask so the front end never hardcodes a path.
+            window.LOGIN_URL = "{{ url_for('login') }}";
+            window.EVENTS_URL = "{{ url_for('events') }}";
+            window.NOTICES_URL = "{{ url_for('list_notices') }}";
+            window.REQUESTS_URL = "{{ url_for('list_requests') }}";
+            window.HISTORY_URL = "{{ url_for('list_history') }}";
+            window.REQUESTS_QTY_URL = "{{ url_for('update_request_qty') }}";
+            window.INVENTORY_URL = "{{ url_for('inventory') }}";
+            window.INVENTORY_QTY_URL = "{{ url_for('update_qty') }}";
+            window.RACK_ROUTES = {
+                std: "{{ url_for('std_rack') }}",
+                server: "{{ url_for('server_rack') }}",
+            };
+        </script>
+        <script src="{{ url_for('static', filename='scripts/auth.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/live.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/racks-data.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/search.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/request.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/review.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/rack.js') }}"></script>
+    </body>
+</html>

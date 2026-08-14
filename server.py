@@ -458,6 +458,11 @@ def server_rack():
     return render_template("server_rack.html")
 
 
+@app.route("/grid_rack")
+def grid_rack():
+    return render_template("grid_rack.html")
+
+
 @app.route("/api/inventory")
 def inventory():
     """Serve inv.json, re-read per request so edits show up on a refresh."""
@@ -470,10 +475,13 @@ def inventory():
 
 
 PATH_FIELDS = ("rack", "bay", "itemClass", "item")
-RACK_TYPES = ("std", "server")
+RACK_TYPES = ("std", "server", "grid")
 
 # A rack's own settings. Every other key on a rack is one of its levels.
 RACK_FIELDS = ("type", "width")
+
+# An item class's own settings. Every other key on one is an item.
+SLOT_FIELDS = ("cols", "rows")
 
 
 class InventoryError(ValueError):
@@ -530,9 +538,25 @@ def clean_inventory(raw):
                         f"{where}, bay {bay_key!r}, {class_key!r} must be an object"
                     )
 
+                spot = f"{where}, {bay_key!r} / {class_key!r}"
+
+                # A grid rack's blocks say how their compartments are laid
+                # out. Kept ahead of the items so the shape reads first.
                 items = {}
+                for field in SLOT_FIELDS:
+                    if field not in item_class:
+                        continue
+                    try:
+                        size = int(item_class[field])
+                    except (TypeError, ValueError):
+                        raise InventoryError(f"{spot} has a {field} that isn't a whole number")
+                    if size < 1:
+                        raise InventoryError(f"{spot} needs at least one {field[:-1]}")
+                    items[field] = size
+
                 for item_key, item in item_class.items():
-                    spot = f"{where}, {bay_key!r} / {class_key!r}"
+                    if item_key in SLOT_FIELDS:
+                        continue
                     if not item_key.strip():
                         raise InventoryError(f"{spot} has an item with no name")
                     if not isinstance(item, dict):

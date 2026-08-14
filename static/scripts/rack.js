@@ -37,6 +37,15 @@ let layout = null;
 const entries = [];
 let active = -1;
 
+// A grid rack shows a count on the compartment as well as in the index, and
+// both have to move together. Keyed by the raw inv.json path, since that is
+// what the two sides have in common.
+const cellsByPath = new Map();
+
+function pathKey(bayKey, classKey, itemKey) {
+    return [bayKey, classKey, itemKey].join(" ");
+}
+
 function slotId(bayIndex, slotIndex) {
     return `${bayIndex}-${slotIndex}`;
 }
@@ -69,8 +78,86 @@ function makeSlot(bayName, slot, id) {
     return el;
 }
 
+// A block of small-part compartments, drawn as the grid it is: cols across by
+// rows down, filled left to right in file order. Empty compartments are drawn
+// too — the drawer has them whether or not anything is written on them yet.
+//
+// The block's caption is the .slot, so clicking it works the dropdown in the
+// index the same as a shelf box does. The compartments sit outside it, since
+// clicking one means "show me that part", not "collapse this block".
+function makeGridSlot(bay, slot, id) {
+    const block = document.createElement("section");
+    block.className = "grid-slot";
+    block.dataset.slot = id;
+
+    const head = document.createElement("button");
+    head.type = "button";
+    head.className = "slot slot--grid";
+    head.dataset.slot = id;
+    head.setAttribute("aria-expanded", "false");
+
+    const name = document.createElement("span");
+    name.className = "grid-slot__name";
+    name.textContent = slot.name;
+    head.append(name);
+
+    const cols = slot.cols || Math.max(slot.items.length, 1);
+    const rows = slot.rows || Math.ceil(slot.items.length / cols) || 1;
+
+    const shape = document.createElement("span");
+    shape.className = "grid-slot__shape";
+    shape.textContent = `${cols} × ${rows}`;
+    head.append(shape);
+
+    head.setAttribute("aria-label",
+        `${bay.name}, ${slot.name}, ${cols} by ${rows}, ${slot.items.length} filled`);
+
+    const cells = document.createElement("div");
+    cells.className = "grid-slot__cells";
+    cells.style.setProperty("--cols", String(cols));
+
+    // Never hide stock: if more is stored here than the grid was drawn for,
+    // the grid grows rather than dropping the overflow off the end.
+    const total = Math.max(cols * rows, slot.items.length);
+
+    for (let index = 0; index < total; index += 1) {
+        const item = slot.items[index];
+
+        if (!item) {
+            const empty = document.createElement("div");
+            empty.className = "cell cell--empty";
+            cells.append(empty);
+            continue;
+        }
+
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "cell";
+        cell.dataset.bayKey = bay.key;
+        cell.dataset.classKey = slot.key;
+        cell.dataset.itemKey = item.key;
+        cell.setAttribute("aria-label", `${item.name}, ${item.qty} in stock`);
+
+        const label = document.createElement("span");
+        label.className = "cell__name";
+        label.textContent = item.name;
+
+        const qty = document.createElement("span");
+        qty.className = "cell__qty";
+        qty.textContent = item.qty;
+
+        cell.append(label, qty);
+        cells.append(cell);
+        cellsByPath.set(pathKey(bay.key, slot.key, item.key), { cell, qty });
+    }
+
+    block.append(head, cells);
+    return block;
+}
+
 function renderBays() {
     bays.innerHTML = "";
+    cellsByPath.clear();
 
     layout.forEach((bay, bayIndex) => {
         const section = document.createElement("section");
@@ -88,7 +175,10 @@ function renderBays() {
         track.dataset.bay = String(bayIndex);
 
         bay.slots.forEach((slot, slotIndex) => {
-            track.appendChild(makeSlot(bay.name, slot, slotId(bayIndex, slotIndex)));
+            const id = slotId(bayIndex, slotIndex);
+            track.appendChild(rack.type === "grid"
+                ? makeGridSlot(bay, slot, id)
+                : makeSlot(bay.name, slot, id));
         });
 
         shelf.appendChild(track);
@@ -299,6 +389,15 @@ function syncEntry(entry) {
         entry.add.disabled = entry.qty <= 0;
         entry.add.title = entry.qty <= 0 ? "None on hand" : "";
     }
+
+    // On a grid rack the compartment carries the count too.
+    const cell = cellsByPath.get(
+        pathKey(entry.path.bay, entry.path.itemClass, entry.path.item));
+    if (cell) {
+        cell.qty.textContent = entry.qty;
+        cell.cell.classList.toggle("is-dirty", dirty);
+        cell.cell.classList.toggle("cell--out", entry.qty <= 0);
+    }
 }
 
 function pendingChanges() {
@@ -430,6 +529,21 @@ function wire(root) {
     }
 
     root.addEventListener("click", (event) => {
+        // A compartment on a grid rack means "show me that part": it opens
+        // its block and puts the cursor on the row, where the count and the
+        // controls are.
+        const cell = event.target.closest(".cell");
+        if (cell && cell.dataset.itemKey) {
+            const found = entries.findIndex((entry) =>
+                entry.path.bay === cell.dataset.bayKey
+                && entry.path.itemClass === cell.dataset.classKey
+                && entry.path.item === cell.dataset.itemKey);
+            if (found >= 0) {
+                setActive(found, { focus: false });
+            }
+            return;
+        }
+
         // Only the box on the rack toggles a class. In the index the class
         // header is a <summary> that toggles itself, and item rows carry the
         // same data-slot for hover-linking — matching those too would
