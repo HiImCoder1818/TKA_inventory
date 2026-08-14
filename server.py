@@ -472,6 +472,9 @@ def inventory():
 PATH_FIELDS = ("rack", "bay", "itemClass", "item")
 RACK_TYPES = ("std", "server")
 
+# A rack's own settings. Every other key on a rack is one of its levels.
+RACK_FIELDS = ("type", "width")
+
 
 class InventoryError(ValueError):
     """A rejected inventory document, with a message worth showing the user."""
@@ -497,8 +500,21 @@ def clean_inventory(raw):
             raise InventoryError(f"{where} needs a type of {' or '.join(RACK_TYPES)}")
 
         cleaned = {"type": rack["type"]}
+
+        # Standard racks aren't all the same size. Width is a fraction of a
+        # full-width one, so 0.5 is half as wide; leaving it off means full.
+        if "width" in rack:
+            try:
+                width = float(rack["width"])
+            except (TypeError, ValueError):
+                raise InventoryError(f"{where} has a width that isn't a number")
+            if not 0 < width <= 1:
+                raise InventoryError(f"{where} needs a width above 0 and at most 1")
+            if width != 1:
+                cleaned["width"] = round(width, 3)
+
         for bay_key, bay in rack.items():
-            if bay_key == "type":
+            if bay_key in RACK_FIELDS:
                 continue
             if not bay_key.strip():
                 raise InventoryError(f"{where} has a bay with no name")

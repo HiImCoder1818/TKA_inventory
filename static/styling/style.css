@@ -703,7 +703,11 @@ button.zone.is-navigable::after {
     gap: clamp(0.6rem, 1.3vw, 1.5rem);
 }
 
+/* --rack-w is how wide this rack stands next to a full-width one, set from
+   inv.json. The caption column keeps its place; only the carcass narrows, so
+   a half-width rack reads as a smaller rack rather than a smaller drawing. */
 .board--std .bay__shelf {
+    width: calc(var(--rack-w, 1) * 100%);
     overflow-x: auto;
     overflow-y: hidden;
     min-height: clamp(3rem, 9vh, 5.5rem);
@@ -1437,7 +1441,8 @@ button.zone.is-navigable::after {
 .editor__name,
 .editor__qty,
 .editor__number,
-.editor__type {
+.editor__type,
+.editor__width {
     min-width: 0;
     padding: 0.32rem 0.5rem;
     border: 1px solid var(--line);
@@ -1460,6 +1465,10 @@ button.zone.is-navigable::after {
     flex: 0 0 9rem;
 }
 
+.editor__width {
+    flex: 0 0 7rem;
+}
+
 .editor__qty {
     flex: 0 0 5rem;
     font-variant-numeric: tabular-nums;
@@ -1468,6 +1477,7 @@ button.zone.is-navigable::after {
 .editor__name:focus,
 .editor__qty:focus,
 .editor__number:focus,
+.editor__width:focus,
 .editor__type:focus {
     outline: 2px solid var(--accent);
     outline-offset: -1px;

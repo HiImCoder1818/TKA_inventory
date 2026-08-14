@@ -1,11 +1,15 @@
 // Structural editor for inv.json, opened from the floor plan's Edit button.
 //
-// It shows the file as a tree — rack > bay > item class > item — where every
+// It shows the file as a tree — rack > level > item class > item — where every
 // level can be added to or removed. inv.json is written as key/value objects,
 // which have no order once you start renaming keys, so the editor works on an
 // array mirror instead and serialises back on save:
 //
-//   [{ number, name, type, bays: [{ key, classes: [{ key, items: [{ key, qty }] }] }] }]
+//   [{ number, name, type, width, bays: [{ key, classes: [{ key, items: [{ key, qty }] }] }] }]
+//
+// A standard rack has however many levels it has rows, and a width relative to
+// a full-width rack; a server rack has faces instead, and no width — they sit
+// side by side and fill what they're given.
 //
 // Nothing is written until Save; Cancel throws the working copy away.
 
@@ -28,9 +32,10 @@ function toModel(raw) {
             number: String(parsed.number),
             name: parsed.name,
             type: rack.type,
+            width: rack.width == null ? 1 : Number(rack.width),
             open: false,
             bays: Object.entries(rack)
-                .filter(([key]) => key !== "type")
+                .filter(([key]) => !RACK_FIELDS.has(key))
                 .map(([bayKey, bay]) => ({
                     key: bayKey,
                     open: false,
@@ -52,6 +57,10 @@ function toInventory() {
     const out = {};
     model.forEach((rack) => {
         const entry = { type: rack.type };
+        // Full width is the default, so it stays out of the file.
+        if (rack.type === "std" && Number(rack.width) !== 1) {
+            entry.width = Number(rack.width);
+        }
         rack.bays.forEach((bay) => {
             const bins = {};
             bay.classes.forEach((itemClass) => {
@@ -190,6 +199,49 @@ function typeField(rack) {
     select.value = rack.type;
     select.addEventListener("change", () => {
         rack.type = select.value;
+        // Width only means something for stacked shelves; a server rack's
+        // faces sit side by side and fill what they're given.
+        render();
+    });
+    return select;
+}
+
+// How wide this rack is next to a full-width one. Named fractions rather than
+// a free number, because that is how the racks get described out loud.
+const RACK_WIDTHS = [
+    [1, "Full width"],
+    [0.75, "¾ width"],
+    [0.667, "⅔ width"],
+    [0.5, "½ width"],
+    [0.333, "⅓ width"],
+];
+
+function widthField(rack) {
+    const select = document.createElement("select");
+    select.className = "editor__width";
+    select.setAttribute("aria-label", "Rack width");
+
+    RACK_WIDTHS.forEach(([value, label]) => {
+        const option = document.createElement("option");
+        option.value = String(value);
+        option.textContent = label;
+        select.appendChild(option);
+    });
+
+    // A width set by hand in inv.json that isn't one of the named fractions
+    // still has to be selectable, or opening the editor would silently round
+    // it to the nearest option on save.
+    const current = Number(rack.width) || 1;
+    if (!RACK_WIDTHS.some(([value]) => value === current)) {
+        const option = document.createElement("option");
+        option.value = String(current);
+        option.textContent = `${Math.round(current * 100)}% width`;
+        select.appendChild(option);
+    }
+
+    select.value = String(current);
+    select.addEventListener("change", () => {
+        rack.width = Number(select.value);
     });
     return select;
 }
@@ -329,19 +381,31 @@ function renderBay(rack, bay, path) {
 }
 
 function renderRack(rack, path) {
-    const header = row(
-        "rack",
-        path,
+    const fields = [
         caret(rack),
         rackNumberField(rack),
         textField(rack.name, "rack name", (value) => { rack.name = value; }),
         typeField(rack),
-        tally(rack.bays.length, "section"),
-        button("+", "editor__btn editor__btn--add", "Add a section to this rack", () => {
-            rack.bays.push({ key: "new section", classes: [], open: true });
-            rack.open = true;
-            render();
-        }),
+    ];
+    if (rack.type === "std") {
+        fields.push(widthField(rack));
+    }
+
+    const header = row(
+        "rack",
+        path,
+        ...fields,
+        tally(rack.bays.length, rack.type === "std" ? "level" : "face"),
+        button("+", "editor__btn editor__btn--add",
+            rack.type === "std" ? "Add a level to this rack" : "Add a face to this rack", () => {
+                rack.bays.push({
+                    key: rack.type === "std" ? `level ${rack.bays.length + 1}` : "new face",
+                    classes: [],
+                    open: true,
+                });
+                rack.open = true;
+                render();
+            }),
         button("−", "editor__btn editor__btn--remove", "Remove this rack", () => {
             model.splice(model.indexOf(rack), 1);
             render();
@@ -402,6 +466,7 @@ function addRack() {
         number,
         name: (RACKS[number] || {}).items || "new rack",
         type: "std",
+        width: 1,
         open: true,
         bays: [],
     });

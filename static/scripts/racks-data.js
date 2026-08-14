@@ -10,17 +10,21 @@
 // ---------------------------------------------------------------------------
 //   "<number><name>": {          e.g. "1parts", "5Tournaments/Meets"
 //       "type": "server" | "std",
-//       "<bay>": {               any key other than "type" is a bay:
-//                                "bins" / "top" / "middle" / "bottom" / ...
+//       "width": 0.5,            optional, standard racks: how wide this one
+//                                is next to a full-width rack. Absent means 1.
+//       "<level>": {             any key other than those two is a level:
+//                                "front" / "back" / "top" / "level 4" / ...
 //           "<item class>": {
 //               "<item>": { "qty": 2 }
 //           }
 //       }
 //   }
 //
-// Bays render in the order they appear in the file. Adding a rack, a bay, a
-// class, an item or a quantity is an edit to inv.json alone — no code change,
-// and nothing here needs to know the names in advance.
+// A standard rack has as many levels as it has level keys, drawn top to
+// bottom in file order; a server rack's are faces, drawn side by side.
+// Adding a rack, a level, a class, an item or a quantity is an edit to
+// inv.json alone — no code change, and nothing here needs to know the names
+// in advance.
 // ---------------------------------------------------------------------------
 
 // Rack number -> label shown on the plan. Contents come from inv.json; a rack
@@ -80,11 +84,27 @@ function parseSlots(entry) {
     }));
 }
 
-// Every key except "type" is a bay, so front/back or top/middle/bottom or
-// anything added later all work without being listed here.
+// A rack's own settings, as opposed to its contents. Every other key is a
+// level, so front/back or top/middle/bottom or six numbered shelves all work
+// without being listed anywhere.
+const RACK_FIELDS = new Set(["type", "width"]);
+
+// How wide a standard rack is drawn, as a fraction of a full-width one.
+// Racks in the room aren't all the same size, and a half-width rack holding
+// as much as a full one would be a drawing that lies.
+const FULL_WIDTH = 1;
+
+function parseWidth(value) {
+    const width = Number(value);
+    if (!Number.isFinite(width) || width <= 0) {
+        return FULL_WIDTH;
+    }
+    return Math.min(width, FULL_WIDTH);
+}
+
 function parseBays(entry) {
     return Object.entries(entry)
-        .filter(([key]) => key !== "type")
+        .filter(([key]) => !RACK_FIELDS.has(key))
         .map(([key, slots]) => ({
             key,
             name: displayName(key),
@@ -118,6 +138,7 @@ function applyInventory(raw) {
     Object.values(RACKS).forEach((rack) => {
         delete rack.key;
         delete rack.type;
+        delete rack.width;
         delete rack.layout;
     });
 
@@ -133,6 +154,7 @@ function applyInventory(raw) {
         }
         rack.key = key;
         rack.type = entry.type;
+        rack.width = parseWidth(entry.width);
         rack.layout = parseBays(entry);
     });
 }

@@ -559,6 +559,11 @@ function render() {
         el.textContent = layout.map((bay) => bay.name).join(" / ");
     });
 
+    // How wide this rack stands next to a full-width one. The shelves are
+    // drawn to it, so a half-width rack looks half as wide and scrolls twice
+    // as soon rather than pretending to hold as much as its neighbour.
+    board.style.setProperty("--rack-w", String(rack.width ?? 1));
+
     renderBays();
     renderIndex();
     wire(board);
