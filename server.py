@@ -1,8 +1,10 @@
+import hashlib
 import hmac
 import json
 import os
 import queue
 import re
+import sys
 import tempfile
 import threading
 import uuid
@@ -407,6 +409,22 @@ def stock_of(inventory, path):
         return None
 
 
+def hash_password(password):
+    """The one place a password becomes what accounts.json stores.
+
+    MD5, so the file no longer reads out everybody's password to anyone who
+    opens it. That is the whole of what it buys: MD5 is fast and unsalted, so
+    these hashes fall to a lookup table in seconds, and two people who pick
+    the same password get the same hash. It is a lock on the drawer, not on
+    the door.
+
+    Everything that hashes goes through here, so trading MD5 for something
+    that stands up — scrypt, bcrypt, argon2 — is a change to this function
+    and a re-hash of the file, and nothing else.
+    """
+    return hashlib.md5(password.encode("utf-8")).hexdigest()
+
+
 @app.post("/api/login")
 def login():
     """Check a name and password against accounts.json.
@@ -435,7 +453,7 @@ def login():
 
     # Compare even when the name is unknown, and say the same thing either
     # way, so the reply doesn't tell an outsider which names are real.
-    if not hmac.compare_digest(stored, password) or not account:
+    if not hmac.compare_digest(stored, hash_password(password)) or not account:
         return jsonify({"error": "That name and password don't match an account."}), 401
 
     return jsonify({"name": name.strip(), "role": account.get("role", "")})
@@ -953,6 +971,16 @@ def dismiss_notice(notice_id):
 
 
 if __name__ == "__main__":
+    # accounts.json stores hashes now, so adding somebody means putting a
+    # hash in it rather than a password:
+    #
+    #     python3 server.py --hash theirpassword
+    #
+    # which saves hunting for a hashing tool and pasting a password into one.
+    if len(sys.argv) == 3 and sys.argv[1] == "--hash":
+        print(hash_password(sys.argv[2]))
+        raise SystemExit(0)
+
     # threaded is the default, but say so: every open page holds an event
     # stream for as long as it is open, and a single-threaded server would
     # serve the first one and hang for everybody else.
