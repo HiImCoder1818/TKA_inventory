@@ -1,14 +1,97 @@
+
+
+
 {
-    "Nathan": {
-        "role": "software",
-        "password": "36846677e3a8f4c0b16d8bdf8ef18608"
-    },
-    "Jeff": {
-        "role": "buisness",
-        "password": "f1bdf5ed1d7ad7ede4e3809bd35644b0"
-    },
-    "Admin": {
-        "role": "admin",
-        "password": "f69baec78203efd3a80a76ec7df144b8"
-    }
+  "henry": {
+    "role": "software",
+    "password": "2b95d1f09b8b66c5c43622a4d9ec9a04"
+  },
+  "isabella": {
+    "role": "software",
+    "password": "ce61649168c4550c2f7acab92354dc6e"
+  },
+  "kevin": {
+    "role": "software",
+    "password": "a564de63c2d0da68cf47586ee05984d7"
+  },
+  "dael": {
+    "role": "software",
+    "password": "775adc8545f3f6f878f267d8f017cadc"
+  },
+  "james": {
+    "role": "software",
+    "password": "99e9bae675b12967251c175696f00a70"
+  },
+  "logan": {
+    "role": "software",
+    "password": "06d80eb0c50b49a509b49f2424e8c805"
+  },
+  "liam": {
+    "role": "software",
+    "password": "d0763edaa9d9bd2a9516280e9044d885"
+  },
+  "cathy": {
+    "role": "software",
+    "password": "bf4397d8b4dc061e1b6d191a352e9134"
+  },
+  "gloria": {
+    "role": "software",
+    "password": "d077f244def8a70e5ea758bd8352fcd8"
+  },
+  "annalyn": {
+    "role": "business",
+    "password": "893b56e3cfe153fb770a120b83bac20c"
+  },
+  "sammy": {
+    "role": "business",
+    "password": "1ebfd5913ef450b92b9e65b6de09acad"
+  },
+  "jem": {
+    "role": "business",
+    "password": "81566e986cf8cc685a05ac5b634af7f8"
+  },
+  "mason": {
+    "role": "business",
+    "password": "24f7ca5f6ff1a5afb9032aa5e533ad95"
+  },
+  "edward": {
+    "role": "business",
+    "password": "de1b2a7baf7850243db71c4abd4e5a39"
+  },
+  "zion": {
+    "role": "business",
+    "password": "35e244830bde1d967298fb9a585854f7"
+  },
+  "arindem": {
+    "role": "business",
+    "password": "6975a7ef5359a31552f6faf3ee02607a"
+  },
+  "evan": {
+    "role": "business",
+    "password": "e756f6aafafdef4debdb5e49bcbd3f11"
+  },
+  "jasper": {
+    "role": "business",
+    "password": "88a93408a0dfb56cff34d324e40933ce"
+  },
+  "jakin": {
+    "role": "business",
+    "password": "6e962aea25038c9fbeb8ff102cc56843"
+  },
+  "jeff": {
+    "role": "admin",
+    "password": "e2e42a07550863f8b67f5eb252581f6d"
+  },
+  "nick": {
+    "role": "admin",
+    "password": "43b90920409618f188bfc6923f16b9fa"
+  },
+  "aiden": {
+    "role": "admin",
+    "password": "b09315ea09c6d3b5680094257f1f70e4"
+  },
+  "nathan": {
+    "role": "admin",
+    "password": "36846677e3a8f4c0b16d8bdf8ef18608"
+  }
 }
