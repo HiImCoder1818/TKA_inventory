@@ -116,13 +116,19 @@
                     <span class="zone__badge" aria-hidden="true">4</span>
                 </button>
 
-                <button type="button" class="zone zone--rack zone--rack-v" style="--x:3.0; --y:23.9; --w:4.9; --h:11.7"
-                        data-rack="3" aria-label="Rack 3 — Hardware">
-                    <span class="zone__badge" aria-hidden="true">3</span>
+                {#
+                    7 and 5 came off the floor row when the two small-parts
+                    cabinets took their place there. Each rack keeps its own
+                    footprint as it moves — the box is the furniture, not the
+                    slot.
+                #}
+                <button type="button" class="zone zone--rack" style="--x:3.0; --y:23.9; --w:9.4; --h:8.1"
+                        data-rack="7" aria-label="Rack 7 — Engineering Class">
+                    <span class="zone__badge" aria-hidden="true">7</span>
                 </button>
-                <button type="button" class="zone zone--rack zone--rack-v zone--rack-dark" style="--x:3.0; --y:38.1; --w:4.9; --h:5.1"
-                        data-rack="2" aria-label="Rack 2 — Hardware">
-                    <span class="zone__badge" aria-hidden="true">2</span>
+                <button type="button" class="zone zone--rack" style="--x:3.0; --y:35.0; --w:9.4; --h:12.7"
+                        data-rack="5" aria-label="Rack 5 — Tournaments and Meets">
+                    <span class="zone__badge" aria-hidden="true">5</span>
                 </button>
 
                 <button type="button" class="zone zone--dark zone--vertical" style="--x:3.4; --y:54.3; --w:8.1; --h:10.7"
@@ -154,17 +160,24 @@
                 </button>
 
                 <!-- ============ FLOOR SHELVING ============ -->
-                <button type="button" class="zone zone--rack" style="--x:28.0; --y:28.9; --w:9.4; --h:8.1"
-                        data-rack="7" aria-label="Rack 7 — Engineering Class">
-                    <span class="zone__badge" aria-hidden="true">7</span>
+                {#
+                    3 and 2 are the small-parts cabinets, drawn narrow and
+                    kept one above the other: they are a pair, and splitting
+                    them around another rack would say they aren't.
+                    Centred on the row's line so the column still reads as a
+                    column at half the width.
+                #}
+                <button type="button" class="zone zone--rack zone--rack-v" style="--x:30.3; --y:28.9; --w:4.9; --h:11.7"
+                        data-rack="3" aria-label="Rack 3 — Hardware">
+                    <span class="zone__badge" aria-hidden="true">3</span>
                 </button>
-                <button type="button" class="zone zone--rack" style="--x:28.0; --y:40.1; --w:9.4; --h:10.7"
+                <button type="button" class="zone zone--rack zone--rack-v zone--rack-dark" style="--x:30.3; --y:41.9; --w:4.9; --h:5.1"
+                        data-rack="2" aria-label="Rack 2 — Hardware">
+                    <span class="zone__badge" aria-hidden="true">2</span>
+                </button>
+                <button type="button" class="zone zone--rack" style="--x:28.0; --y:51.0; --w:9.4; --h:10.7"
                         data-rack="6" aria-label="Rack 6 — Electronics">
                     <span class="zone__badge" aria-hidden="true">6</span>
-                </button>
-                <button type="button" class="zone zone--rack" style="--x:28.0; --y:53.8; --w:9.4; --h:12.7"
-                        data-rack="5" aria-label="Rack 5 — Tournaments and Meets">
-                    <span class="zone__badge" aria-hidden="true">5</span>
                 </button>
 
                 <button type="button" class="zone zone--rack" style="--x:52.2; --y:23.9; --w:9.4; --h:11.2"
