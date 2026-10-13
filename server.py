@@ -984,4 +984,4 @@ if __name__ == "__main__":
     # threaded is the default, but say so: every open page holds an event
     # stream for as long as it is open, and a single-threaded server would
     # serve the first one and hang for everybody else.
-    app.run(host="192.168.51.187", debug=False, port=8000, threaded=True)
+    app.run(host="", debug=False, port=8000, threaded=True)
