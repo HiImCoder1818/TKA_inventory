@@ -1,6 +1,3 @@
-
-
-
 {
   "henry": {
     "role": "software",
@@ -22,61 +19,61 @@
     "role": "software",
     "password": "99e9bae675b12967251c175696f00a70"
   },
-  "logan": {
+  "allen": {
     "role": "software",
+    "password": "517b08dafd8aa7559790bf0715de47c6"
+  },
+  "logan": {
+    "role": "buisness",
     "password": "06d80eb0c50b49a509b49f2424e8c805"
   },
   "liam": {
-    "role": "software",
+    "role": "buisness",
     "password": "d0763edaa9d9bd2a9516280e9044d885"
   },
   "cathy": {
-    "role": "software",
+    "role": "buisness",
     "password": "bf4397d8b4dc061e1b6d191a352e9134"
   },
   "gloria": {
-    "role": "software",
+    "role": "buisness",
     "password": "d077f244def8a70e5ea758bd8352fcd8"
   },
+  "jakin": {
+    "role": "buisness",
+    "password": "6e962aea25038c9fbeb8ff102cc56843"
+  },
   "annalyn": {
-    "role": "business",
+    "role": "hardware",
     "password": "893b56e3cfe153fb770a120b83bac20c"
   },
   "sammy": {
-    "role": "business",
+    "role": "hardware",
     "password": "1ebfd5913ef450b92b9e65b6de09acad"
   },
   "jem": {
-    "role": "business",
+    "role": "hardware",
     "password": "81566e986cf8cc685a05ac5b634af7f8"
   },
   "mason": {
-    "role": "business",
+    "role": "hardware",
     "password": "24f7ca5f6ff1a5afb9032aa5e533ad95"
   },
   "edward": {
-    "role": "business",
+    "role": "hardware",
     "password": "de1b2a7baf7850243db71c4abd4e5a39"
   },
   "zion": {
-    "role": "business",
+    "role": "hardware",
     "password": "35e244830bde1d967298fb9a585854f7"
   },
-  "arindem": {
-    "role": "business",
-    "password": "6975a7ef5359a31552f6faf3ee02607a"
-  },
   "evan": {
-    "role": "business",
+    "role": "hardware",
     "password": "e756f6aafafdef4debdb5e49bcbd3f11"
   },
   "jasper": {
-    "role": "business",
+    "role": "hardware",
     "password": "88a93408a0dfb56cff34d324e40933ce"
-  },
-  "jakin": {
-    "role": "business",
-    "password": "6e962aea25038c9fbeb8ff102cc56843"
   },
   "jeff": {
     "role": "admin",
@@ -92,6 +89,6 @@
   },
   "nathan": {
     "role": "admin",
-    "password": "36846677e3a8f4c0b16d8bdf8ef18608"
+    "password": "28ca53d2b7bb4aa13549b4022c79dca1"
   }
 }

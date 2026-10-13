@@ -2,16 +2,41 @@
     "1parts": {
         "type": "server",
         "front": {
-            "item class 1": {
-                "item 1": {"qty": 2},
-                "item 2": {"qty": 2},
-                "item 3": {"qty": 2}
+            "Cameras/OTOS": {
+                "Office Camera": {"qty": 1},
+                "Limelight Camera": {"qty": 0},
+                "Optical Odometry Sensor": {"qty": 1},
+                "new item": {"qty": 0}
             },
-            "item class 2": {
-                "item 1": {"qty": 5}
+            "Omni wheels": {
+                "2\" dualie omni wheel": {"qty": 2},
+                "3' single omni wheel": {"qty": 5},
+                "5\" dualie omni wheel": {"qty": 6}
             },
-            "rack 3": {
-                "item 1": {"qty": 3}
+            "Compliant 1": {
+                "Compliant stars 10 points": {"qty": 20},
+                "Compliant stars 8 points, uneven": {"qty": 4},
+                "Compliant wheels 2\"": {"qty": 16},
+                "Compliant wheels 2.5\"": {"qty": 4},
+                "Spintake": {"qty": 9},
+                "Compliant stars 9 points": {"qty": 3},
+                "Compliant stars flex 8 points, blue, borehole": {"qty": 2},
+                "Some random wheels": {"qty": 0}
+            },
+            "Compliant 2": {
+                "Compliant wheels 2.5\"": {"qty": 15},
+                "Compliant wheels 2.5\" with bore hole": {"qty": 7},
+                "Compliant wheels 3\" with bore hole": {"qty": 2},
+                "sushi roller 3\"": {"qty": 4},
+                "Rhino wheel": {"qty": 1},
+                "gecko wheels": {"qty": 6},
+                "High durability compliance wheels 3.5\"": {"qty": 6},
+                "Compliance wheels 5\" bore whole": {"qty": 3},
+                "Compliance wheels 5\"": {"qty": 3}
+            },
+            "New catagory": {
+                "new item 1": {"qty": 4},
+                "new item 2": {"qty": 4}
             }
         },
         "back": {
@@ -19,7 +44,8 @@
                 "item 1": {"qty": 2},
                 "item 2": {"qty": 2},
                 "item 3": {"qty": 2}
-            }
+            },
+            "new bin": {}
         }
     },
     "2Hardware": {
@@ -27,7 +53,10 @@
         "left": {
             "block 1": {
                 "cols": 8,
-                "rows": 8
+                "rows": 8,
+                "m3x4": {"qty": 4},
+                "m3x5": {"qty": 14},
+                "i": {"qty": 2}
             },
             "block 2": {
                 "cols": 3,
@@ -58,7 +87,7 @@
         "level 1": {
             "item class 1": {
                 "item 1": {"qty": 2},
-                "item 2": {"qty": 2},
+                "item 2": {"qty": 0},
                 "item 3": {"qty": 2}
             },
             "item class 2": {
@@ -91,7 +120,10 @@
                 "item 3": {"qty": 2}
             }
         },
-        "level 4": {}
+        "level 4": {},
+        "level 5": {
+            "new bin": {}
+        }
     },
     "6Electronics/Misc": {
         "type": "std",
