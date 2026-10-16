@@ -56,6 +56,13 @@ _notices_lock = threading.Lock()
 # Per person, so one ignored queue can't crowd out everybody else's.
 MAX_NOTICES_EACH = 30
 
+# How long a write of the notices file waits for its turn before giving up.
+# The file is small and a turn costs milliseconds, so this is only ever
+# reached when something is wrong — and then it is the ceiling on how much a
+# jammed file can slow a handover down. Missing a notice costs somebody a
+# toast; a slow resolve costs whoever is standing at the shelf.
+NOTICES_LOCK_WAIT = 3
+
 # How long a stream waits before sending a comment frame to prove it is still
 # there. Proxies and browsers drop a connection that goes quiet — and it is
 # also how a listener that vanished without saying so gets noticed, since the
@@ -114,10 +121,27 @@ def notify(name, notice):
         **notice,
     }
 
-    with _notices_lock:
+    # Writing a notice is a read-modify-write, so it does need the lock — but
+    # with a deadline. The handover itself is already done and written by the
+    # time we get here; making somebody's resolve hang because the notices
+    # file is slow would be letting the receipt hold up the delivery.
+    if not _notices_lock.acquire(timeout=NOTICES_LOCK_WAIT):
+        app.logger.warning(
+            "gave up waiting to write a notice for %s — %s is not responding",
+            name, NOTICES_PATH.name)
+        return
+
+    try:
         pending = read_notices()
         pending.append(entry)
         write_notices(pending)
+    except OSError as exc:
+        # Never write a trimmed file off a read that failed: that would throw
+        # away everybody's unread notices to save one.
+        app.logger.warning("could not record a notice for %s: %s", name, exc)
+        return
+    finally:
+        _notices_lock.release()
 
     payload = json.dumps(entry)
 
@@ -128,11 +152,25 @@ def notify(name, notice):
 
 
 def notices_for(name):
-    """Everything still waiting to be read by `name`, oldest first."""
+    """Everything still waiting to be read by `name`, oldest first.
+
+    Deliberately takes no lock. Notices are written by replacing the whole
+    file in one rename, so a reader opens either the old file or the new one
+    and never a half-written one — the lock buys a reader nothing, and taking
+    it would mean every page that connects queues behind every other.
+
+    Nor does a failure here get to travel. This runs inside the event stream,
+    and an exception would kill the stream mid-response and have the page
+    reconnect into the same failure a second later. A page with no notices on
+    it is a far smaller problem than a page that cannot hold a connection.
+    """
     if not name:
         return []
-    with _notices_lock:
+    try:
         return [entry for entry in read_notices() if entry.get("for") == name]
+    except OSError as exc:
+        app.logger.warning("could not read %s: %s", NOTICES_PATH.name, exc)
+        return []
 
 
 def client_id():
@@ -958,7 +996,10 @@ def list_notices():
 @app.post("/api/notices/<notice_id>/dismiss")
 def dismiss_notice(notice_id):
     """Put a notice away. The only thing that ever removes one."""
-    with _notices_lock:
+    if not _notices_lock.acquire(timeout=NOTICES_LOCK_WAIT):
+        return jsonify({"error": f"{NOTICES_PATH.name} is busy, try again"}), 503
+
+    try:
         pending = read_notices()
         kept = [entry for entry in pending if entry.get("id") != notice_id]
 
@@ -966,6 +1007,11 @@ def dismiss_notice(notice_id):
             return jsonify({"error": f"no notice with id {notice_id}"}), 404
 
         write_notices(kept)
+    except OSError as exc:
+        app.logger.warning("could not dismiss %s: %s", notice_id, exc)
+        return jsonify({"error": f"could not reach {NOTICES_PATH.name}"}), 503
+    finally:
+        _notices_lock.release()
 
     return jsonify({"dismissed": notice_id, "waiting": len(kept)})
 
