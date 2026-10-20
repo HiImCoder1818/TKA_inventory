@@ -24,6 +24,7 @@ ACCOUNTS_PATH = Path(__file__).parent / "accounts.json"
 REQUESTS_PATH = Path(__file__).parent / "requests.json"
 HISTORY_PATH = Path(__file__).parent / "history.json"
 NOTICES_PATH = Path(__file__).parent / "notices.json"
+DRAFTS_PATH = Path(__file__).parent / "drafts.json"
 
 # Items are single-key objects; keeping them on one line means a quantity
 # change stays a one-line diff in git.
@@ -62,6 +63,11 @@ MAX_NOTICES_EACH = 30
 # jammed file can slow a handover down. Missing a notice costs somebody a
 # toast; a slow resolve costs whoever is standing at the shelf.
 NOTICES_LOCK_WAIT = 3
+
+# Drafts are read and rewritten whole, so the same arrangement: one lock, and
+# a deadline on it rather than a handler that waits forever.
+_drafts_lock = threading.Lock()
+DRAFTS_LOCK_WAIT = 3
 
 # How long a stream waits before sending a comment frame to prove it is still
 # there. Proxies and browsers drop a connection that goes quiet — and it is
@@ -373,6 +379,23 @@ def write_notices(entries):
     write_atomically(NOTICES_PATH, json.dumps(kept, indent=4, ensure_ascii=False) + "\n")
 
 
+# Work in progress in the structural editor, one entry per person: what the
+# document looked like when they opened it, and what they have made of it.
+# Kept on the server so closing the tab, or somebody else saving first,
+# doesn't throw away an afternoon of typing.
+def read_drafts():
+    try:
+        with DRAFTS_PATH.open(encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_drafts(drafts):
+    write_atomically(DRAFTS_PATH, json.dumps(drafts, indent=4, ensure_ascii=False) + "\n")
+
+
 def log_request(entry):
     """Append a request to the history the moment it is made.
 
@@ -540,6 +563,191 @@ RACK_FIELDS = ("type", "width")
 SLOT_FIELDS = ("cols", "rows")
 
 
+# --------------------------- merging two editors ---------------------------
+#
+# The editor used to save by replacing the whole document, so whoever saved
+# second quietly undid the first. Two people tidying different racks is the
+# normal case, though, and neither should have to wait for the other.
+#
+# So a save is worked out three ways: what the document looked like when you
+# opened it (base), what you made it (yours), and what it is on disk right now
+# (current). Anything you didn't touch keeps whatever it says on disk, and
+# anything nobody else touched takes your value. Only a field you both changed
+# is a real argument, and that is reported rather than guessed at.
+#
+# The comparison runs on leaves, not whole racks, so "we both edited rack 5"
+# is not a conflict — "we both set the count of the same item" is.
+
+# Stands for "this key isn't in that version of the document", which is a
+# different thing from a key whose value is None.
+MISSING = object()
+
+# Attribute keys are prefixed so they can't collide with a bay, a class or an
+# item that happens to be called "type" or "cols".
+def flatten_inventory(doc):
+    """A document as a flat map of leaf path -> value, with a marker for each
+    container so an empty rack or level still registers as existing."""
+    flat = {}
+    for rack_key, rack in (doc or {}).items():
+        if not isinstance(rack, dict):
+            continue
+        flat[(rack_key,)] = True
+        flat[(rack_key, "#type")] = rack.get("type")
+        flat[(rack_key, "#width")] = rack.get("width")
+
+        for bay_key, bay in rack.items():
+            if bay_key in RACK_FIELDS or not isinstance(bay, dict):
+                continue
+            flat[(rack_key, bay_key)] = True
+
+            for class_key, item_class in bay.items():
+                if not isinstance(item_class, dict):
+                    continue
+                flat[(rack_key, bay_key, class_key)] = True
+                flat[(rack_key, bay_key, class_key, "#cols")] = item_class.get("cols")
+                flat[(rack_key, bay_key, class_key, "#rows")] = item_class.get("rows")
+
+                for item_key, item in item_class.items():
+                    if item_key in SLOT_FIELDS:
+                        continue
+                    flat[(rack_key, bay_key, class_key, item_key)] = (
+                        item.get("qty") if isinstance(item, dict) else None
+                    )
+    return flat
+
+
+def describe_key(key):
+    """A leaf path, said the way the screen says it."""
+    if len(key) == 1:
+        return f"rack {key[0]}"
+    if key[-1].startswith("#"):
+        return f"{' / '.join(key[:-1])} ({key[-1][1:]})"
+    return " / ".join(key)
+
+
+def say_value(value):
+    if value is MISSING:
+        return "removed"
+    if value is True:
+        return "added"
+    if value is None:
+        return "unset"
+    return str(value)
+
+
+def merge_flat(base, mine, current):
+    """Three-way merge of flattened documents.
+
+    Returns the merged map and the keys we both changed — those take the
+    saving editor's value, since somebody has to win and they are the one
+    standing here.
+    """
+    merged = {}
+    conflicts = []
+
+    for key in set(base) | set(mine) | set(current):
+        was = base.get(key, MISSING)
+        ours = mine.get(key, MISSING)
+        theirs = current.get(key, MISSING)
+
+        if ours == was:
+            value = theirs          # we left it alone; take the file's word
+        elif theirs == was:
+            value = ours            # nobody else touched it; take ours
+        elif ours == theirs:
+            value = ours            # same edit, nothing to argue about
+        else:
+            value = ours
+            conflicts.append({
+                "where": describe_key(key),
+                "was": say_value(was),
+                "yours": say_value(ours),
+                "theirs": say_value(theirs),
+            })
+
+        if value is not MISSING:
+            merged[key] = value
+
+    conflicts.sort(key=lambda item: item["where"])
+    return merged, conflicts
+
+
+def changed_against(base, mine):
+    """What the saving editor actually altered, for them to look over."""
+    changes = []
+    for key in set(base) | set(mine):
+        was = base.get(key, MISSING)
+        ours = mine.get(key, MISSING)
+        if ours != was:
+            changes.append({
+                "where": describe_key(key),
+                "was": say_value(was),
+                "now": say_value(ours),
+            })
+    changes.sort(key=lambda item: item["where"])
+    return changes
+
+
+def _ordered(prefix, depth, merged, *sources):
+    """Keys that survive at one level, in the order the sources list them, so
+    a merge doesn't shuffle the file."""
+    seen = set()
+    out = []
+    for source in sources:
+        for key in source:
+            if len(key) != depth or key[:depth - 1] != prefix:
+                continue
+            name = key[depth - 1]
+            if name in seen or name.startswith("#") or (prefix + (name,)) not in merged:
+                continue
+            seen.add(name)
+            out.append(name)
+    return out
+
+
+def rebuild_inventory(merged, current, mine):
+    """The flat map back into the nested document inv.json stores.
+
+    Order follows the file first and the editor second, so racks and levels
+    stay where they were and anything new lands at the end."""
+    order_sources = (flatten_inventory(current), flatten_inventory(mine))
+    doc = {}
+
+    for rack_key in _ordered((), 1, merged, *order_sources):
+        rack = {"type": merged.get((rack_key, "#type"))}
+        width = merged.get((rack_key, "#width"))
+        if width is not None:
+            rack["width"] = width
+
+        for bay_key in _ordered((rack_key,), 2, merged, *order_sources):
+            bay = {}
+            for class_key in _ordered((rack_key, bay_key), 3, merged, *order_sources):
+                item_class = {}
+                for field in SLOT_FIELDS:
+                    size = merged.get((rack_key, bay_key, class_key, f"#{field}"))
+                    if size is not None:
+                        item_class[field] = size
+
+                for item_key in _ordered((rack_key, bay_key, class_key), 4,
+                                         merged, *order_sources):
+                    item_class[item_key] = {
+                        "qty": merged[(rack_key, bay_key, class_key, item_key)]
+                    }
+                bay[class_key] = item_class
+            rack[bay_key] = bay
+        doc[rack_key] = rack
+
+    return doc
+
+
+def merge_inventory(base, mine, current):
+    """Fold one editor's work into the document as it stands now."""
+    flat_merged, conflicts = merge_flat(
+        flatten_inventory(base), flatten_inventory(mine), flatten_inventory(current)
+    )
+    return rebuild_inventory(flat_merged, current, mine), conflicts
+
+
 class InventoryError(ValueError):
     """A rejected inventory document, with a message worth showing the user."""
 
@@ -634,7 +842,13 @@ def clean_inventory(raw):
 
 @app.put("/api/inventory")
 def replace_inventory():
-    """Replace the whole document — the structural editor's save."""
+    """Replace the whole document, wholesale.
+
+    The editor no longer comes this way: replacing is what let one person's
+    save undo another's, so it goes through a draft and a merge instead. This
+    stays for scripted bulk edits, where there is one author and no race —
+    but wire a second editor up to it and the old problem comes back.
+    """
     try:
         data = clean_inventory(request.get_json(silent=True))
     except InventoryError as exc:
@@ -643,6 +857,164 @@ def replace_inventory():
     write_inventory(data)
     announce("inventory", origin=client_id())
     return jsonify(data)
+
+
+# ----------------------------- editor drafts -----------------------------
+
+def draft_owner():
+    """Whose draft a request is about. Unverified, like every other name
+    here — it decides which drawer to open, not who is allowed to."""
+    payload = request.get_json(silent=True) or {}
+    name = payload.get("name") or request.args.get("who") or ""
+    return name.strip()
+
+
+def preview_draft(draft, current):
+    """What this draft would do to the document as it stands now."""
+    merged, conflicts = merge_inventory(draft["base"], draft["proposed"], current)
+    return {
+        "at": draft.get("at", ""),
+        "changes": changed_against(
+            flatten_inventory(draft["base"]), flatten_inventory(draft["proposed"])
+        ),
+        "conflicts": conflicts,
+    }, merged
+
+
+@app.get("/api/inventory/draft")
+def read_draft():
+    """Whatever this person had in the editor when they last left it."""
+    name = draft_owner()
+    if not name:
+        return jsonify({"error": "who is asking?"}), 400
+
+    draft = read_drafts().get(name)
+    if not draft:
+        return jsonify({"draft": None})
+
+    try:
+        current = read_inventory()
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        return jsonify({"error": f"{INVENTORY_PATH.name}: {exc}"}), 500
+
+    summary, _ = preview_draft(draft, current)
+    return jsonify({"draft": draft["proposed"], "base": draft["base"], **summary})
+
+
+@app.post("/api/inventory/draft")
+def save_draft():
+    """Put the editor's working copy aside without touching inv.json.
+
+    Answers with what applying it would do — what this person changed, and
+    anything somebody else has changed underneath them since they started.
+    """
+    payload = request.get_json(silent=True) or {}
+    name = draft_owner()
+    if not name:
+        return jsonify({"error": "a draft needs a name to belong to"}), 400
+
+    try:
+        proposed = clean_inventory(payload.get("proposed"))
+    except InventoryError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    base = payload.get("base")
+    if not isinstance(base, dict):
+        return jsonify({"error": "a draft needs the document it started from"}), 400
+
+    draft = {
+        "at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "base": base,
+        "proposed": proposed,
+    }
+
+    if not _drafts_lock.acquire(timeout=DRAFTS_LOCK_WAIT):
+        return jsonify({"error": f"{DRAFTS_PATH.name} is busy, try again"}), 503
+    try:
+        drafts = read_drafts()
+        drafts[name] = draft
+        write_drafts(drafts)
+    except OSError as exc:
+        app.logger.warning("could not save %s's draft: %s", name, exc)
+        return jsonify({"error": f"could not reach {DRAFTS_PATH.name}"}), 503
+    finally:
+        _drafts_lock.release()
+
+    try:
+        current = read_inventory()
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        return jsonify({"error": f"{INVENTORY_PATH.name}: {exc}"}), 500
+
+    summary, _ = preview_draft(draft, current)
+    return jsonify(summary), 201
+
+
+@app.delete("/api/inventory/draft")
+def discard_draft():
+    """Throw the working copy away. inv.json was never touched."""
+    name = draft_owner()
+    if not name:
+        return jsonify({"error": "who is asking?"}), 400
+
+    if not _drafts_lock.acquire(timeout=DRAFTS_LOCK_WAIT):
+        return jsonify({"error": f"{DRAFTS_PATH.name} is busy, try again"}), 503
+    try:
+        drafts = read_drafts()
+        existed = drafts.pop(name, None) is not None
+        if existed:
+            write_drafts(drafts)
+    except OSError as exc:
+        app.logger.warning("could not discard %s's draft: %s", name, exc)
+        return jsonify({"error": f"could not reach {DRAFTS_PATH.name}"}), 503
+    finally:
+        _drafts_lock.release()
+
+    return jsonify({"discarded": existed})
+
+
+@app.post("/api/inventory/draft/confirm")
+def confirm_draft():
+    """Fold the draft into inv.json and let it go.
+
+    The merge is worked out again here rather than trusting the preview: the
+    file may have moved on in the seconds between looking and saying yes.
+    """
+    name = draft_owner()
+    if not name:
+        return jsonify({"error": "who is asking?"}), 400
+
+    draft = read_drafts().get(name)
+    if not draft:
+        return jsonify({"error": "there is no draft to apply"}), 404
+
+    try:
+        current = read_inventory()
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        return jsonify({"error": f"{INVENTORY_PATH.name}: {exc}"}), 500
+
+    merged, conflicts = merge_inventory(draft["base"], draft["proposed"], current)
+
+    try:
+        data = clean_inventory(merged)
+    except InventoryError as exc:
+        return jsonify({"error": f"the merged inventory doesn't hold up: {exc}"}), 409
+
+    write_inventory(data)
+
+    if not _drafts_lock.acquire(timeout=DRAFTS_LOCK_WAIT):
+        app.logger.warning("applied %s's draft but could not clear it", name)
+    else:
+        try:
+            drafts = read_drafts()
+            drafts.pop(name, None)
+            write_drafts(drafts)
+        except OSError as exc:
+            app.logger.warning("applied %s's draft but could not clear it: %s", name, exc)
+        finally:
+            _drafts_lock.release()
+
+    announce("inventory", origin=client_id())
+    return jsonify({"applied": True, "conflicts": conflicts, "inventory": data})
 
 
 @app.post("/api/inventory/qty")

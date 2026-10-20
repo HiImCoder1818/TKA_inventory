@@ -1549,6 +1549,95 @@ button.zone.is-navigable::after {
     line-height: 1.5;
 }
 
+/* A draft waiting, or word that somebody else saved. Informational, so it
+   sits apart from the red error strip above it. */
+.editor__draft {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.6rem 1.1rem;
+    border-bottom: 1px solid var(--line);
+    background: #16263a;
+    color: #bcd6f5;
+    font-size: 0.76rem;
+    line-height: 1.5;
+}
+
+.editor__draft[hidden] {
+    display: none;
+}
+
+.editor__link {
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 650;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* The review step: what Save staged, and anything two people both touched. */
+.editor__review {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 1rem 1.1rem;
+}
+
+.editor__review[hidden] {
+    display: none;
+}
+
+.editor__review-title {
+    margin: 0 0 0.8rem;
+    font-size: 0.95rem;
+    font-weight: 750;
+}
+
+.editor__review-lead,
+.editor__clash-lead {
+    margin: 0 0 0.45rem;
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
+.editor__clash-lead {
+    color: #ffc4c4;
+    font-weight: 650;
+}
+
+.editor__changes,
+.editor__clash {
+    margin: 0 0 1rem;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.25rem;
+}
+
+.editor__changes li,
+.editor__clash li {
+    padding: 0.35rem 0.55rem;
+    border-radius: 0.3rem;
+    background: var(--bg);
+    font-size: 0.74rem;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+}
+
+/* The ones that will overwrite somebody else's work read as warnings. */
+.editor__clash li {
+    border-left: 2px solid #c23b3b;
+    background: #2a1616;
+    color: #ffc4c4;
+}
+
 .editor__body {
     flex: 1 1 auto;
     min-height: 0;

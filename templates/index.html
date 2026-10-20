@@ -40,12 +40,36 @@
             </header>
 
             <p class="editor__errors" role="alert" hidden></p>
+
+            {# Work picked back up from a draft, or left waiting on the server. #}
+            <p class="editor__draft" data-draft-note hidden>
+                <span data-draft-text></span>
+                <button type="button" class="editor__link" data-discard-draft>Discard it</button>
+            </p>
+
             <div class="editor__body"></div>
+
+            {#
+                The review step. Saving puts the working copy aside and shows
+                what applying it would do, so nobody writes over somebody else
+                without being told.
+            #}
+            <div class="editor__review" data-review hidden>
+                <h3 class="editor__review-title">Ready to apply</h3>
+                <div data-review-conflicts hidden>
+                    <p class="editor__clash-lead" data-clash-lead></p>
+                    <ul class="editor__clash" data-clash-list></ul>
+                </div>
+                <p class="editor__review-lead" data-review-lead></p>
+                <ul class="editor__changes" data-change-list></ul>
+            </div>
 
             <footer class="editor__foot">
                 <button type="button" class="editor__addrack" data-add-rack>+ Rack</button>
                 <button type="button" class="editor__cancel" data-close-editor>Cancel</button>
-                <button type="button" class="save-btn save-btn--dirty" data-editor-save>Save inventory</button>
+                <button type="button" class="editor__cancel" data-back-to-editing hidden>Back to editing</button>
+                <button type="button" class="save-btn save-btn--dirty" data-editor-save>Save changes</button>
+                <button type="button" class="save-btn save-btn--dirty" data-apply-draft hidden>Apply to inventory</button>
             </footer>
         </dialog>
 
@@ -256,6 +280,7 @@
             window.HISTORY_URL = "{{ url_for('list_history') }}";
             window.REQUESTS_QTY_URL = "{{ url_for('update_request_qty') }}";
             window.INVENTORY_URL = "{{ url_for('inventory') }}";
+            window.INVENTORY_DRAFT_URL = "{{ url_for('read_draft') }}";
             window.RACK_ROUTES = {
                 std: "{{ url_for('std_rack') }}",
                 server: "{{ url_for('server_rack') }}",

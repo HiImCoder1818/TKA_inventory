@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# Written beside the real file by write_atomically and renamed into place;
+# one only exists mid-save, or after a save that was interrupted.
+*.tmp

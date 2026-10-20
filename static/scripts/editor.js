@@ -11,14 +11,34 @@
 // a full-width rack; a server rack has faces instead, and no width — they sit
 // side by side and fill what they're given.
 //
-// Nothing is written until Save; Cancel throws the working copy away.
+// Saving happens in two steps, because two people edit this at once.
+//
+// Save puts the working copy aside on the server as a draft and shows what
+// applying it would do. Apply folds it into inv.json — and folds, rather than
+// replaces: the server works out what you changed against the document you
+// opened, and lays only that over whatever is on disk now. So two people
+// tidying different racks both keep their work, and the one who saves second
+// no longer undoes the first.
+//
+// A field you have both changed is the one case that can't be reconciled.
+// Those are listed before you apply, and yours is the one that sticks.
+//
+// The draft outlives the dialog, the tab and the browser, so a reload picks up
+// where you left off instead of starting again. Cancel leaves it waiting;
+// Discard throws it away.
 
 const dialog = document.querySelector(".editor");
 const body = dialog ? dialog.querySelector(".editor__body") : null;
 const errorBox = dialog ? dialog.querySelector(".editor__errors") : null;
+const review = dialog ? dialog.querySelector("[data-review]") : null;
+const draftNote = dialog ? dialog.querySelector("[data-draft-note]") : null;
 
 let model = [];
 let onSaved = null;
+
+// The document this editing session started from. The server needs it to tell
+// what we changed apart from what everyone else changed.
+let baseline = {};
 
 // ------------------------------ model ------------------------------
 
@@ -532,6 +552,80 @@ function setAllOpen(open) {
     render();
 }
 
+// Who the draft belongs to. Signing out mid-edit shouldn't silently write
+// somebody else's name on your work.
+function editorName() {
+    const account = currentAccount();
+    return account && account.name ? account.name : "";
+}
+
+// -------------------------- the review step --------------------------
+
+function listInto(target, entries, line) {
+    target.innerHTML = "";
+    entries.forEach((entry) => {
+        const li = document.createElement("li");
+        li.textContent = line(entry);
+        target.append(li);
+    });
+}
+
+function countOf(n, noun) {
+    return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
+function showReview(summary) {
+    const conflicts = summary.conflicts || [];
+    const changes = summary.changes || [];
+
+    dialog.querySelector("[data-review-lead]").textContent = changes.length
+        ? `${countOf(changes.length, "change")} to apply:`
+        : "Nothing has changed since you opened the editor.";
+    listInto(dialog.querySelector("[data-change-list]"), changes,
+        (c) => `${c.where} — ${c.was} → ${c.now}`);
+
+    const clashBox = dialog.querySelector("[data-review-conflicts]");
+    clashBox.hidden = conflicts.length === 0;
+    if (conflicts.length) {
+        dialog.querySelector("[data-clash-lead]").textContent =
+            `Somebody else changed ${countOf(conflicts.length, "thing")} you also `
+            + "changed while this was open. Applying will overwrite theirs with yours:";
+        listInto(dialog.querySelector("[data-clash-list]"), conflicts,
+            (c) => `${c.where} — theirs ${c.theirs}, yours ${c.yours}`);
+    }
+
+    setStage("review");
+}
+
+// The dialog is either being edited or being reviewed; the footer and body
+// follow.
+function setStage(stage) {
+    const reviewing = stage === "review";
+    body.hidden = reviewing;
+    review.hidden = !reviewing;
+
+    dialog.querySelector("[data-editor-save]").hidden = reviewing;
+    dialog.querySelector("[data-add-rack]").hidden = reviewing;
+    dialog.querySelector("[data-apply-draft]").hidden = !reviewing;
+    dialog.querySelector("[data-back-to-editing]").hidden = !reviewing;
+    dialog.querySelector('[data-close-editor].editor__cancel').hidden = reviewing;
+}
+
+// `canDiscard` is for notes about a draft that actually exists — offering to
+// throw one away when there isn't one would be a button that does nothing.
+function showDraftNote(message, canDiscard) {
+    if (!draftNote) {
+        return;
+    }
+    draftNote.hidden = !message;
+    dialog.querySelector("[data-draft-text]").textContent = message || "";
+    dialog.querySelector("[data-discard-draft]").hidden = !canDiscard;
+}
+
+// ----------------------------- save / apply -----------------------------
+
+// Step one: put the working copy somewhere safe and find out what applying it
+// would do. inv.json is not touched.
 function save(saveButton) {
     const problems = findProblems();
     if (problems.length) {
@@ -540,16 +634,20 @@ function save(saveButton) {
     }
     showProblems([]);
 
+    const name = editorName();
+    if (!name) {
+        showProblems(["Sign in again before saving — a draft has to belong to somebody."]);
+        return;
+    }
+
     const label = saveButton.textContent;
     saveButton.disabled = true;
     saveButton.textContent = "Saving…";
 
-    replaceInventory(toInventory())
-        .then(() => {
-            dialog.close();
-            if (onSaved) {
-                onSaved();
-            }
+    saveDraft(name, baseline, toInventory())
+        .then((summary) => {
+            showDraftNote("Saved as a draft. inv.json hasn't changed yet.", true);
+            showReview(summary);
         })
         .catch((error) => {
             console.error("inventory:", error.message);
@@ -561,14 +659,74 @@ function save(saveButton) {
         });
 }
 
+// Step two: fold it in. The server redoes the merge, so what lands accounts
+// for anything saved in the meantime.
+function apply(applyButton) {
+    const label = applyButton.textContent;
+    applyButton.disabled = true;
+    applyButton.textContent = "Applying…";
+
+    applyDraft(editorName())
+        .then(() => {
+            showDraftNote("");
+            dialog.close();
+            setStage("edit");
+            if (onSaved) {
+                onSaved();
+            }
+        })
+        .catch((error) => {
+            console.error("inventory:", error.message);
+            setStage("edit");
+            showProblems([error.message]);
+        })
+        .finally(() => {
+            applyButton.disabled = false;
+            applyButton.textContent = label;
+        });
+}
+
+function dropDraft() {
+    const name = editorName();
+    if (!name) {
+        return;
+    }
+    discardDraft(name)
+        .then(() => {
+            showDraftNote("");
+            openEditor();          // start again from what's on disk
+        })
+        .catch((error) => showProblems([error.message]));
+}
+
 function openEditor() {
-    // Edit a copy, so Cancel really does discard.
-    loadInventory()
-        .then((raw) => {
-            model = toModel(JSON.parse(JSON.stringify(raw)));
+    const name = editorName();
+
+    // Edit a copy, so Cancel really does discard. A draft waiting on the
+    // server wins over the file: it is this person's own unfinished work, and
+    // it already knows which document it was started from.
+    Promise.all([
+        loadInventory(),
+        name ? loadDraft(name).catch(() => ({ draft: null })) : { draft: null },
+    ])
+        .then(([raw, pending]) => {
+            const resuming = Boolean(pending && pending.draft);
+            const starting = resuming ? pending.draft : raw;
+
+            baseline = JSON.parse(JSON.stringify(resuming ? pending.base : raw));
+            model = toModel(JSON.parse(JSON.stringify(starting)));
+
             showProblems([]);
+            showDraftNote(resuming
+                ? `Picking up the draft you left — ${pending.changes.length} unsaved `
+                  + "change" + (pending.changes.length === 1 ? "" : "s") + "."
+                : "", resuming);
+
+            setStage("edit");
             render();
-            dialog.showModal();
+            if (!dialog.open) {
+                dialog.showModal();
+            }
         })
         .catch((error) => {
             console.error("inventory:", error.message);
@@ -600,17 +758,25 @@ function initEditor(options = {}) {
     dialog.querySelectorAll("[data-editor-save]").forEach((el) => {
         el.addEventListener("click", () => save(el));
     });
+    dialog.querySelectorAll("[data-apply-draft]").forEach((el) => {
+        el.addEventListener("click", () => apply(el));
+    });
+    dialog.querySelectorAll("[data-back-to-editing]").forEach((el) => {
+        el.addEventListener("click", () => setStage("edit"));
+    });
+    dialog.querySelectorAll("[data-discard-draft]").forEach((el) => {
+        el.addEventListener("click", dropDraft);
+    });
 
-    // The editor works on a copy taken when it opened, and saving replaces
-    // the whole document. If someone else changes inv.json in the meantime,
-    // saving would quietly undo their work — so say so rather than letting
-    // the live refresh happen invisibly behind the dialog.
+    // Somebody else saved while this was open. That used to mean the work in
+    // here was about to overwrite theirs; now it is merged, so this is a note
+    // rather than a warning — and only worth making if both of you touched
+    // the same field, which the review step says plainly before anything is
+    // written.
     document.addEventListener("inventorychange", () => {
-        if (dialog.open) {
-            showProblems([
-                "inv.json changed somewhere else while this was open. Saving now would",
-                "overwrite that change — close and reopen the editor to start from it.",
-            ]);
+        if (dialog.open && review.hidden) {
+            showDraftNote("Somebody else saved while this was open. Your changes will "
+                + "be merged with theirs — Save shows anything you both touched.");
         }
     });
 }

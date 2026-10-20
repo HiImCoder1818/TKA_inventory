@@ -211,18 +211,58 @@ function itemKey(path) {
     return [path.rack, path.bay, path.itemClass, path.item].join(" ");
 }
 
-// Replace the whole document — the structural editor's save. The server
-// validates the shape before writing, so a rejected edit changes nothing.
-async function replaceInventory(data) {
-    const response = await fetch(window.INVENTORY_URL, {
-        method: "PUT",
+// ------------------------------ editor drafts ------------------------------
+//
+// The editor's working copy lives on the server between Save and Apply, so it
+// survives a reload and so applying it can be merged against whatever the
+// file says by then rather than replacing it wholesale.
+
+async function draftCall(method, payload) {
+    const url = payload && payload.who
+        ? `${window.INVENTORY_DRAFT_URL}?who=${encodeURIComponent(payload.who)}`
+        : window.INVENTORY_DRAFT_URL;
+
+    const options = { method, headers: liveHeaders() };
+    if (payload && !payload.who) {
+        options.headers = liveHeaders({ "Content-Type": "application/json" });
+        options.body = JSON.stringify(payload);
+    }
+
+    const response = await fetch(url, options);
+    const body = await response.json();
+
+    if (!response.ok) {
+        throw new Error(body.error || `draft failed (${response.status})`);
+    }
+    return body;
+}
+
+// Put the working copy aside and report what applying it would do.
+function saveDraft(name, base, proposed) {
+    return draftCall("POST", { name, base, proposed });
+}
+
+// Whatever this person left in the editor last time, or null.
+function loadDraft(name) {
+    return draftCall("GET", { who: name });
+}
+
+function discardDraft(name) {
+    return draftCall("DELETE", { who: name });
+}
+
+// Fold the draft into inv.json. The server redoes the merge first, since the
+// file can move between looking at the summary and saying yes.
+async function applyDraft(name) {
+    const response = await fetch(`${window.INVENTORY_DRAFT_URL}/confirm`, {
+        method: "POST",
         headers: liveHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(data),
+        body: JSON.stringify({ name }),
     });
     const body = await response.json();
 
     if (!response.ok) {
-        throw new Error(body.error || `save failed (${response.status})`);
+        throw new Error(body.error || `could not apply (${response.status})`);
     }
     return body;
 }
