@@ -43,6 +43,20 @@
     "role": "buisness",
     "password": "6e962aea25038c9fbeb8ff102cc56843"
   },
+
+  "daniel": {
+    "role": "buisness",
+    "password": "1a1dc91c907325c69271ddf0c944bc72"
+  },
+  "ethan": {
+    "role": "buisness",
+    "password": "1a1dc91c907325c69271ddf0c944bc72"
+  },
+  "issac": {
+    "role": "buisness",
+    "password": "1a1dc91c907325c69271ddf0c944bc72"
+  },
+
   "annalyn": {
     "role": "hardware",
     "password": "893b56e3cfe153fb770a120b83bac20c"

@@ -4,7 +4,7 @@
         "front": {
             "Cameras/OTOS": {
                 "Office Camera": {"qty": 1},
-                "Limelight Camera": {"qty": 0},
+                "Limelight Camera": {"qty": 2},
                 "Optical Odometry Sensor": {"qty": 1},
                 "new item": {"qty": 0}
             },
@@ -45,7 +45,10 @@
                 "item 2": {"qty": 2},
                 "item 3": {"qty": 2}
             },
-            "new bin": {}
+            "new bin": {},
+            "new bin 2": {
+                "test item": {"qty": 3}
+            }
         }
     },
     "2Hardware": {
@@ -185,7 +188,12 @@
     "15Tool Storage": {
         "type": "server",
         "front": {},
-        "back": {}
+        "back": {
+            "number clicker": {
+                "The one and only number clicker": {"qty": 1}
+            },
+            "Vastar": {}
+        }
     },
     "16Stationary Supplies": {
         "type": "std",
