@@ -36,6 +36,10 @@ const draftNote = dialog ? dialog.querySelector("[data-draft-note]") : null;
 let model = [];
 let onSaved = null;
 
+// The inventory as this page last saw it, to tell a real change from a
+// refresh that found nothing new.
+let lastSeenInventory = "";
+
 // The document this editing session started from. The server needs it to tell
 // what we changed apart from what everyone else changed.
 let baseline = {};
@@ -713,6 +717,7 @@ function openEditor() {
             const resuming = Boolean(pending && pending.draft);
             const starting = resuming ? pending.draft : raw;
 
+            lastSeenInventory = JSON.stringify(raw);
             baseline = JSON.parse(JSON.stringify(resuming ? pending.base : raw));
             model = toModel(JSON.parse(JSON.stringify(starting)));
 
@@ -774,7 +779,13 @@ function initEditor(options = {}) {
     // the same field, which the review step says plainly before anything is
     // written.
     document.addEventListener("inventorychange", () => {
-        if (dialog.open && review.hidden) {
+        // A tab coming back into view re-reads everything whether or not
+        // anything moved, so check that something actually did.
+        const now = JSON.stringify(rawInventory);
+        const moved = now !== lastSeenInventory;
+        lastSeenInventory = now;
+
+        if (moved && dialog.open && review.hidden) {
             showDraftNote("Somebody else saved while this was open. Your changes will "
                 + "be merged with theirs — Save shows anything you both touched.");
         }

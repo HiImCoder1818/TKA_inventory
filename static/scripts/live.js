@@ -25,6 +25,13 @@ let liveChip = null;
 // everything. Every one after it is a reconnection that missed whatever
 // happened while it was down.
 let hasConnected = false;
+// Set while the stream is deliberately closed — the tab is in the background
+// — so that coming back re-reads what was missed, the same as a reconnection.
+let fellBehind = false;
+// Whether the server is managing to save. "stalled" means it is running from
+// memory and what people do is not reaching the disk.
+let storageState = "ok";
+let linkState = "off";
 
 // Stamp on any request that changes something, so its own echo can be
 // dropped rather than triggering a redundant re-read.
@@ -33,9 +40,21 @@ function liveHeaders(headers) {
 }
 
 function setLiveState(state, title) {
+    linkState = state;
     if (!liveChip) {
         return;
     }
+
+    // A server that can't save outranks everything else the chip could say:
+    // the page looks and works as normal, so nothing else would give it away.
+    if (state === "on" && storageState === "stalled") {
+        liveChip.dataset.state = "unsaved";
+        liveChip.title = "The server can't write to its disk right now. It is still "
+            + "running, but changes are not being saved — tell whoever runs it.";
+        liveChip.querySelector(".live__label").textContent = "Not saving";
+        return;
+    }
+
     liveChip.dataset.state = state;
     liveChip.title = title;
     liveChip.querySelector(".live__label").textContent =
@@ -260,13 +279,23 @@ function connectLive() {
     liveSource.addEventListener("ready", () => {
         setLiveState("on", "Updating as others make changes");
 
-        // Catch up on whatever happened while the connection was down. The
-        // stream carries no backlog, so the only safe assumption is that
-        // everything moved.
-        if (hasConnected) {
+        // Catch up on whatever happened while the connection was down, or
+        // while this tab was in the background. The stream carries no
+        // backlog, so the only safe assumption is that everything moved.
+        if (hasConnected || fellBehind) {
             announceChange(["inventory", "requests", "history"]);
         }
         hasConnected = true;
+        fellBehind = false;
+    });
+
+    liveSource.addEventListener("storage", (event) => {
+        try {
+            storageState = JSON.parse(event.data).state === "stalled" ? "stalled" : "ok";
+        } catch (error) {
+            return;
+        }
+        setLiveState(linkState, "Updating as others make changes");
     });
 
     liveSource.addEventListener("message", (event) => {
@@ -292,15 +321,42 @@ function connectLive() {
     });
 }
 
+// A browser gives one site six connections, and a stream holds one for as
+// long as it is open. Six tabs of this app each holding a stream used them
+// all, after which nothing in any of the tabs could load — not the inventory,
+// not a request being sent. It looked like the server had frozen.
+//
+// So a tab only holds its stream while somebody can see it. A tab in the
+// background lets go, and re-reads everything when it is looked at again.
+// Nothing is missed: notices wait on the server, and the catch-up is the same
+// one a dropped connection gets.
+function followVisibility() {
+    if (document.hidden) {
+        if (liveSource) {
+            liveSource.close();
+            liveSource = null;
+        }
+        fellBehind = true;
+        return;
+    }
+    connectLive();
+}
+
 function initLive() {
     liveChip = document.querySelector(".live");
     setLiveState("off", "Connecting…");
 
     // Who this page is signed in as decides which messages are for it, so a
     // sign-in or sign-out reopens the stream under the new name.
-    document.addEventListener("accountchange", reconnectLive);
+    document.addEventListener("accountchange", () => {
+        if (!document.hidden) {
+            reconnectLive();
+        }
+    });
+    document.addEventListener("visibilitychange", followVisibility);
 
-    connectLive();
+    // Opened in a background tab: wait until it is looked at.
+    followVisibility();
 }
 
 initLive();

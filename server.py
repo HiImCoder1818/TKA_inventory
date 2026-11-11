@@ -1,3 +1,5 @@
+import atexit
+import copy
 import hashlib
 import hmac
 import json
@@ -7,6 +9,7 @@ import re
 import sys
 import tempfile
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -215,6 +218,11 @@ def events():
             waiting = json.dumps(notices_for(who))
             yield f"event: notices\ndata: {waiting}\n\n"
 
+            # Whether changes are reaching the disk. Sent every time, so a
+            # page that reconnects after the trouble has passed stops saying
+            # there is some.
+            yield f"event: storage\ndata: {json.dumps({'state': storage_state()})}\n\n"
+
             while True:
                 try:
                     payload = outbox.get(timeout=HEARTBEAT_SECONDS)
@@ -238,11 +246,6 @@ def events():
     })
 
 
-def read_inventory():
-    with INVENTORY_PATH.open(encoding="utf-8") as handle:
-        return json.load(handle)
-
-
 def write_atomically(path, text):
     """Write beside the target and rename, so an interrupted save can never
     leave a half-written file behind."""
@@ -256,11 +259,242 @@ def write_atomically(path, text):
         raise
 
 
+# --------------------------------- storage ---------------------------------
+#
+# The JSON files are the record, but nobody waits on them.
+#
+# Every request used to open, parse and rewrite them inline: sending a parts
+# request was three reads and two writes before the server could answer. That
+# is fine while the disk answers in a millisecond, and it stops being fine the
+# moment it doesn't — a project folder that a sync service keeps (iCloud,
+# Drive, OneDrive) or that sits on a network share can take seconds per file,
+# or hang outright when the machine is offline. Then every submission timed
+# out, and every page re-reading after it queued up behind.
+#
+# So each file is held in memory. Reads are answered from there and never
+# touch the disk. Writes change the copy in memory, answer, and are put on
+# disk a moment later by one background thread — which is also what notices
+# when a file was edited by hand, or by a git pull, and reads it back in.
+#
+# What that costs: a change is acknowledged a few milliseconds before it is
+# on disk. If the disk stops accepting writes, the server carries on from
+# memory, says so loudly, and keeps retrying — but anything it could not
+# write is lost if it is shut down before the disk comes back.
+
+class JsonFile:
+    """One JSON file, mirrored in memory."""
+
+    def __init__(self, path):
+        self.path = path
+        self._lock = threading.Lock()
+        self._loaded = False
+        self._value = None       # the parsed document
+        self._error = None       # or why there isn't one: missing, not JSON
+        self._unsaved = None     # text waiting to be written
+        self._on_disk = None     # what the disk copy looked like when we last knew
+
+    def _signature(self):
+        try:
+            found = os.stat(self.path)
+        except FileNotFoundError:
+            return None
+        return (found.st_mtime_ns, found.st_size)
+
+    def load(self):
+        """Read the file off the disk. The one slow operation here, so it runs
+        at start-up and on the background thread, not while somebody waits."""
+        signature = self._signature()
+        try:
+            with self.path.open(encoding="utf-8") as handle:
+                value, error = json.loads(handle.read()), None
+        except (FileNotFoundError, json.JSONDecodeError) as exc:
+            value, error = None, exc
+
+        with self._lock:
+            # Something newer than the disk is waiting to be written: ours
+            # stands, and the disk catches up when the write goes through.
+            if self._unsaved is None:
+                self._value, self._error = value, error
+                self._on_disk = signature
+            self._loaded = True
+
+    def read(self):
+        """The document, as a copy the caller is free to change. Raises what
+        opening the file would have: FileNotFoundError, JSONDecodeError."""
+        if not self._loaded:
+            self.load()
+        with self._lock:
+            if self._error is not None:
+                raise self._error.with_traceback(None)
+            return copy.deepcopy(self._value)
+
+    def write(self, value, text):
+        """Take `value` as the document from now on; `text` is how it is laid
+        out on disk, which happens shortly, off this thread."""
+        with self._lock:
+            self._value, self._error = copy.deepcopy(value), None
+            self._unsaved = text
+            self._loaded = True
+        start_storage()
+        _disk_wake.set()
+
+    def flush(self):
+        """Put the waiting text on disk. Raises OSError if the disk won't."""
+        with self._lock:
+            text = self._unsaved
+        if text is None:
+            return False
+
+        write_atomically(self.path, text)
+        signature = self._signature()
+
+        with self._lock:
+            if self._unsaved is text:       # nothing newer arrived meanwhile
+                self._unsaved = None
+            self._on_disk = signature
+        return True
+
+    def changed_on_disk(self):
+        """Has somebody else rewritten the file — a hand edit, a git pull?
+        Only a stat, which stays quick even where a read would not."""
+        with self._lock:
+            if self._unsaved is not None or not self._loaded:
+                return False
+            known = self._on_disk
+        return self._signature() != known
+
+    @property
+    def unsaved(self):
+        with self._lock:
+            return self._unsaved is not None
+
+
+INVENTORY = JsonFile(INVENTORY_PATH)
+ACCOUNTS = JsonFile(ACCOUNTS_PATH)
+REQUESTS = JsonFile(REQUESTS_PATH)
+HISTORY = JsonFile(HISTORY_PATH)
+NOTICES = JsonFile(NOTICES_PATH)
+DRAFTS = JsonFile(DRAFTS_PATH)
+
+# Files whose changes pages care about, and the name each is announced under.
+FILES = {
+    INVENTORY: "inventory",
+    REQUESTS: "requests",
+    HISTORY: "history",
+    ACCOUNTS: None,
+    NOTICES: None,
+    DRAFTS: None,
+}
+
+_disk_wake = threading.Event()
+_disk_thread = None
+_disk_thread_lock = threading.Lock()
+
+# Whether the last attempt to write succeeded. Pages are told when this flips,
+# because "your changes are only in memory" is something people working the
+# shelves need to know and can't see.
+_disk_ok = True
+
+DISK_RETRY_SECONDS = 5       # between attempts while the disk is refusing
+DISK_WATCH_SECONDS = 2       # how often to look for edits made outside the app
+DISK_SLOW_SECONDS = 1.0      # a write slower than this is worth a line in the log
+
+
+def storage_state():
+    return "ok" if _disk_ok else "stalled"
+
+
+def _set_disk_ok(ok, why=""):
+    global _disk_ok
+    if ok == _disk_ok:
+        return
+    _disk_ok = ok
+
+    if ok:
+        app.logger.warning("the disk is taking writes again; everything is saved")
+    else:
+        app.logger.error(
+            "CANNOT WRITE TO DISK (%s). Still running from memory and retrying "
+            "every %ss. Changes made from here on are NOT saved until this "
+            "clears. Do not stop the server while this is showing.",
+            why, DISK_RETRY_SECONDS)
+
+    with _listeners_lock:
+        waiting = list(_listeners)
+    send_to(waiting, f"event: storage\ndata: {json.dumps({'state': storage_state()})}\n\n")
+
+
+def _disk_loop():
+    """The only thread that reads or writes the data files once the server is
+    up. If the disk is slow, this is the thing that waits — not a request."""
+    last_look = 0.0
+
+    while True:
+        _disk_wake.wait(timeout=DISK_WATCH_SECONDS if _disk_ok else DISK_RETRY_SECONDS)
+        _disk_wake.clear()
+
+        try:
+            for data_file in FILES:
+                started = time.monotonic()
+                if data_file.flush():
+                    took = time.monotonic() - started
+                    if took > DISK_SLOW_SECONDS:
+                        app.logger.warning(
+                            "writing %s took %.1fs. A local disk does this in "
+                            "milliseconds; is this folder synced or on a network?",
+                            data_file.path.name, took)
+            _set_disk_ok(True)
+        except OSError as exc:
+            _set_disk_ok(False, f"{type(exc).__name__}: {exc}")
+            continue
+
+        # Pick up edits made behind the app's back, and tell the pages.
+        if time.monotonic() - last_look < DISK_WATCH_SECONDS:
+            continue
+        last_look = time.monotonic()
+
+        changed = []
+        for data_file, name in FILES.items():
+            try:
+                if data_file.changed_on_disk():
+                    data_file.load()
+                    app.logger.info("%s changed on disk; re-read it", data_file.path.name)
+                    if name:
+                        changed.append(name)
+            except OSError as exc:
+                app.logger.warning("could not re-read %s: %s", data_file.path.name, exc)
+        if changed:
+            announce(*changed)
+
+
+def start_storage():
+    """Start the background writer. Safe to call more than once."""
+    global _disk_thread
+    with _disk_thread_lock:
+        if _disk_thread is None or not _disk_thread.is_alive():
+            _disk_thread = threading.Thread(target=_disk_loop, name="disk", daemon=True)
+            _disk_thread.start()
+
+
+@atexit.register
+def _save_on_exit():
+    """A last attempt to put anything unsaved on disk on the way out."""
+    for data_file in FILES:
+        try:
+            data_file.flush()
+        except OSError as exc:
+            print(f"!! could not save {data_file.path.name} on exit: {exc}", file=sys.stderr)
+
+
+def read_inventory():
+    return INVENTORY.read()
+
+
 def write_inventory(data):
-    """Rewrite inv.json in place, preserving its layout and key order."""
+    """Rewrite inv.json, preserving its layout and key order."""
     text = json.dumps(data, indent=4, ensure_ascii=False)
     text = _QTY_INLINE.sub(lambda match: '{"qty": %s}' % match.group(1), text)
-    write_atomically(INVENTORY_PATH, text + "\n")
+    INVENTORY.write(data, text + "\n")
 
 
 def read_requests():
@@ -271,8 +505,7 @@ def read_requests():
     that from being a trap.
     """
     try:
-        with REQUESTS_PATH.open(encoding="utf-8") as handle:
-            data = json.load(handle)
+        data = REQUESTS.read()
     except FileNotFoundError:
         return []
 
@@ -336,20 +569,19 @@ def dump_requests(entries):
 
 
 def write_requests(entries):
-    write_atomically(REQUESTS_PATH, dump_requests(entries))
+    REQUESTS.write(entries, dump_requests(entries))
 
 
 def read_history():
     try:
-        with HISTORY_PATH.open(encoding="utf-8") as handle:
-            data = json.load(handle)
+        data = HISTORY.read()
     except (FileNotFoundError, json.JSONDecodeError):
         return []
     return data if isinstance(data, list) else []
 
 
 def write_history(entries):
-    write_atomically(HISTORY_PATH, dump_requests(entries))
+    HISTORY.write(entries, dump_requests(entries))
 
 
 # Notices are the app's own bookkeeping rather than something anyone edits by
@@ -357,8 +589,7 @@ def write_history(entries):
 # request files use.
 def read_notices():
     try:
-        with NOTICES_PATH.open(encoding="utf-8") as handle:
-            data = json.load(handle)
+        data = NOTICES.read()
     except (FileNotFoundError, json.JSONDecodeError):
         return []
     return [entry for entry in data if isinstance(entry, dict)] if isinstance(data, list) else []
@@ -376,7 +607,7 @@ def write_notices(entries):
             kept.append(entry)
 
     kept.reverse()
-    write_atomically(NOTICES_PATH, json.dumps(kept, indent=4, ensure_ascii=False) + "\n")
+    NOTICES.write(kept, json.dumps(kept, indent=4, ensure_ascii=False) + "\n")
 
 
 # Work in progress in the structural editor, one entry per person: what the
@@ -385,15 +616,14 @@ def write_notices(entries):
 # doesn't throw away an afternoon of typing.
 def read_drafts():
     try:
-        with DRAFTS_PATH.open(encoding="utf-8") as handle:
-            data = json.load(handle)
+        data = DRAFTS.read()
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
 
 
 def write_drafts(drafts):
-    write_atomically(DRAFTS_PATH, json.dumps(drafts, indent=4, ensure_ascii=False) + "\n")
+    DRAFTS.write(drafts, json.dumps(drafts, indent=4, ensure_ascii=False) + "\n")
 
 
 def log_request(entry):
@@ -502,8 +732,7 @@ def login():
         return jsonify({"error": "name and password are required"}), 400
 
     try:
-        with ACCOUNTS_PATH.open(encoding="utf-8") as handle:
-            accounts = json.load(handle)
+        accounts = ACCOUNTS.read()
     except FileNotFoundError:
         return jsonify({"error": f"{ACCOUNTS_PATH.name} not found"}), 500
     except json.JSONDecodeError as exc:
@@ -1388,6 +1617,98 @@ def dismiss_notice(notice_id):
     return jsonify({"dismissed": notice_id, "waiting": len(kept)})
 
 
+# ------------------------------- start-up -------------------------------
+
+# Where a project folder ends up when something is syncing it. Files in these
+# can be "in the cloud" rather than on the disk, and reading one then needs
+# the internet — on a network without it, the read hangs and times out.
+SYNCED_FOLDERS = (
+    ("/Library/Mobile Documents/", "iCloud Drive"),
+    ("/Library/CloudStorage/", "a cloud drive (Google Drive, OneDrive or Dropbox)"),
+    ("/Google Drive", "Google Drive"),
+    ("/GoogleDrive", "Google Drive"),
+    ("/OneDrive", "OneDrive"),
+    ("/Dropbox", "Dropbox"),
+)
+
+# macOS marks a file whose contents are in the cloud and not on this disk.
+SF_DATALESS = 0x40000000
+
+
+def data_folder_warnings():
+    """Reasons to expect this folder to be slow or unreadable offline."""
+    folder = str(INVENTORY_PATH.parent.resolve())
+    found = []
+
+    for marker, service in SYNCED_FOLDERS:
+        if marker.lower() in (folder + "/").lower():
+            found.append(
+                f"This folder is inside {service}. Its files can live in the cloud "
+                "instead of on this disk, and reading them then needs the internet.")
+            break
+    else:
+        home = str(Path.home())
+        if sys.platform == "darwin" and any(
+                (folder + "/").startswith(f"{home}/{part}/") for part in ("Desktop", "Documents")):
+            found.append(
+                "This folder is under Desktop or Documents. If 'Desktop & Documents "
+                "Folders' is switched on in iCloud settings, macOS syncs it, and its "
+                "files can need the internet to read.")
+
+    for data_file in FILES:
+        try:
+            flags = getattr(os.stat(data_file.path), "st_flags", 0)
+        except OSError:
+            continue
+        if flags & SF_DATALESS:
+            found.append(
+                f"{data_file.path.name} is NOT on this disk right now: macOS is keeping "
+                "it in the cloud. It cannot be read without the internet.")
+
+    return found
+
+
+def load_data_files():
+    """Read every data file into memory before taking a request, and say so
+    plainly if the disk is the kind that will cause trouble later."""
+    say = lambda text: print(text, file=sys.stderr, flush=True)
+    warnings = data_folder_warnings()
+
+    for data_file in FILES:
+        started = time.monotonic()
+        try:
+            data_file.load()
+        except OSError as exc:
+            say(f"\n!! Could not read {data_file.path.name}: {exc}")
+            say("!! This is what a file kept in the cloud, or on a network drive, looks")
+            say("!! like when the machine can't reach it. The server cannot start without")
+            say("!! its data. Move the whole project folder somewhere that is only on")
+            say(f"!! this computer (for example {Path.home() / 'tka_inventory'}) and run it")
+            say("!! from there.")
+            for line in warnings:
+                say(f"!!   - {line}")
+            raise SystemExit(1)
+
+        took = time.monotonic() - started
+        if took > 0.5:
+            warnings.append(
+                f"Reading {data_file.path.name} took {took:.1f}s. A local disk takes "
+                "a few milliseconds.")
+
+    if warnings:
+        say("\n" + "=" * 74)
+        say("WARNING: this folder may not be a plain local folder.")
+        for line in warnings:
+            say(f"  - {line}")
+        say("  The server holds its data in memory, so requests will not wait on the")
+        say("  disk. But saving can stall when this machine is offline, and anything")
+        say("  not saved is lost if the server is stopped. Moving the project folder")
+        say(f"  somewhere local (for example {Path.home() / 'tka_inventory'}) fixes it for good.")
+        say("=" * 74 + "\n")
+
+    start_storage()
+
+
 if __name__ == "__main__":
     # accounts.json stores hashes now, so adding somebody means putting a
     # hash in it rather than a password:
@@ -1398,6 +1719,8 @@ if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--hash":
         print(hash_password(sys.argv[2]))
         raise SystemExit(0)
+
+    load_data_files()
 
     # threaded is the default, but say so: every open page holds an event
     # stream for as long as it is open, and a single-threaded server would

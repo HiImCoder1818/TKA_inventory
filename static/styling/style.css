@@ -2900,6 +2900,25 @@ body.is-locked {
     display: inline;
 }
 
+/* The server is up but can't save. Red and worded, because nothing else on
+   the page would show it: everything still works, it just isn't being kept. */
+.live[data-state="unsaved"] {
+    padding: 0.2rem 0.5rem;
+    border: 1px solid #a13d3d;
+    border-radius: 0.8rem;
+    background: #3a1d1d;
+}
+
+.live[data-state="unsaved"] .live__dot {
+    background: #f87171;
+    box-shadow: none;
+}
+
+.live[data-state="unsaved"] .live__label {
+    display: inline;
+    color: #ffc4c4;
+}
+
 @keyframes live-pulse {
     50% { opacity: 0.3; }
 }
